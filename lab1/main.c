@@ -62,6 +62,8 @@ void runApp() {
     bool didS1Pressed = false;
     bool didS2Pressed = false;
 
+    bool isLED1Enabled = false;
+
     while(isAppRunning) {
 
         bool isS1Pressed = getIsS1Pressed();
@@ -76,6 +78,18 @@ void runApp() {
 
         if(wasS1Pressed) {
             toggleLED2(true);
+        }
+
+        // LED1 handling
+        // TODO: fix it
+        if(wasS2Released && isS1Pressed) {
+            if(isLED1Enabled) {
+                isLED1Enabled = false;
+                toggleLED1(false);
+            } else {
+                isLED1Enabled = true;
+                toggleLED1(true);
+            }
         }
 
         didS1Pressed = isS1Pressed;
