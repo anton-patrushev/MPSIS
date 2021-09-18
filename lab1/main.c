@@ -1,8 +1,5 @@
 #include <msp430.h> 
-
-void disableWatchdogTimer() {
-    WDTCTL = WDTPW | WDTHOLD;   // stop watchdog timer
-}
+#include "main.helpers.c"
 
 void setupLEDs() {
     P1DIR |= BIT0; // make LED1 output
@@ -30,32 +27,6 @@ void setup() {
 }
 
 
-
-bool getIsS1Pressed() {
-    return !(bool)(P1IN & BIT7);
-}
-
-bool getIsS2Pressed() {
-    return !(bool)(P2IN & BIT2);
-}
-
-void toggleLED1(bool turnOn) {
-    if(turnOn) {
-        P1OUT |= BIT0;
-    } else {
-        P1OUT &= ~BIT0;
-    }
-}
-
-void toggleLED2(bool turnOn) {
-    if(turnOn) {
-        P8OUT |= BIT1;
-    } else {
-        P8OUT &= ~BIT1;
-    }
-}
-
-
 void runApp() {
     bool isAppRunning = true;
 
@@ -72,7 +43,7 @@ void runApp() {
         bool wasS2Released = didS2Pressed && !isS2Pressed;
         bool wasS1Pressed = !didS1Pressed && isS1Pressed;
 
-        if(wasS2Released) {
+        if(wasS2Released && !isS1Pressed) {
             toggleLED2(false);
         }
 
@@ -81,7 +52,7 @@ void runApp() {
         }
 
         // LED1 handling
-        // TODO: fix it
+        // TODO: ensure it works (may require debug and fix)
         if(wasS2Released && isS1Pressed) {
             if(isLED1Enabled) {
                 isLED1Enabled = false;
