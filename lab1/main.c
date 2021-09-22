@@ -1,12 +1,12 @@
 #include <msp430.h> 
-#include "main.helpers.c"
+#include "main.helpers.h"
 
 void setupLEDs() {
     P1DIR |= BIT0; // make LED1 output
     P1OUT &= ~BIT0; // make LED1 off by default
 
     P8DIR |= BIT1; // make LED2 output
-    P8DIR &= ~BIT1; // make LED2 off by default
+    P8OUT &= ~BIT1; // make LED2 off by default
 }
 
 void setupButtons() {
@@ -28,38 +28,38 @@ void setup() {
 
 
 void runApp() {
-    bool isAppRunning = true;
+    int isAppRunning = TRUE;
 
-    bool didS1Pressed = false;
-    bool didS2Pressed = false;
+    int didS1Pressed = FALSE;
+    int didS2Pressed = FALSE;
 
-    bool isLED1Enabled = false;
+    int isLED1Enabled = FALSE;
 
     while(isAppRunning) {
 
-        bool isS1Pressed = getIsS1Pressed();
-        bool isS2Pressed = getIsS2Pressed();
+    	int isS1Pressed = getIsS1Pressed();
+    	int isS2Pressed = getIsS2Pressed();
 
-        bool wasS2Released = didS2Pressed && !isS2Pressed;
-        bool wasS1Pressed = !didS1Pressed && isS1Pressed;
+    	int wasS2Released = didS2Pressed && !isS2Pressed;
+    	int wasS1Pressed = !didS1Pressed && isS1Pressed;
 
         if(wasS2Released && !isS1Pressed) {
-            toggleLED2(false);
+            toggleLED2(FALSE);
         }
 
         if(wasS1Pressed) {
-            toggleLED2(true);
+            toggleLED2(TRUE);
         }
 
         // LED1 handling
         // TODO: ensure it works (may require debug and fix)
         if(wasS2Released && isS1Pressed) {
             if(isLED1Enabled) {
-                isLED1Enabled = false;
-                toggleLED1(false);
+                isLED1Enabled = FALSE;
+                toggleLED1(FALSE);
             } else {
-                isLED1Enabled = true;
-                toggleLED1(true);
+                isLED1Enabled = TRUE;
+                toggleLED1(TRUE);
             }
         }
 
