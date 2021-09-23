@@ -14,17 +14,14 @@ void setupButtons() {
     P1REN |= BIT7; // enable pull up/down resistor for S1
     P1OUT |= BIT7; // select pull up resistor (not pressed - high, pressed - low state)
     P1IE |= BIT7; // enable interrupts for S1
-    // TODO: verify it's fine
-    P1IES |= BIT7; // interrupts generated at failing edge (from high to low)
+    P1IES |= BIT7; // interrupts generated at falling edge (from high to low)
     P1IFG &= ~BIT7; // clear interrupt flag
 
     P2DIR &= ~BIT2; // make S1 input
     P2REN |= BIT2; // enable pull up/down resistor for S1
     P2OUT |= BIT2; // select pull up resistor (not pressed - high, pressed - low state)
     P2IE |= BIT2; // enable interrupts for S2
-    // TODO: verify it's fine
-    // TODO: research how it works
-    P2IES &= ~BIT2; // interrupts generated at coming edge (from low to high)
+    P2IES |= BIT2; // interrupts generated at falling edge (from high to low)
     P2IFG &= ~BIT2; // clear interrupt flag
 }
 
@@ -43,11 +40,7 @@ void setup() {
 }
 
 void runApp() {
-    // TODO: use this or line below
     __no_operation(); // 1 cycle delay
-
-    // TODO: decide to use this or line above
-//    while(1) {}
 }
 
 /**
@@ -62,51 +55,47 @@ int main(void) {
 }
 
 // control flags
-int didS1Pressed = FALSE;
-int didS2Pressed = FALSE;
 int isS1Pressed = FALSE;
 int isS2Pressed = FALSE;
+int isLED1Enabled = FALSE
 
 // will be called when button fired
 #pragma vector = PORT1_VECTOR
 __interrupt void handleButton1InterruptRoutine() {
-    // TODO: ensure it's a right way to check IRQ register source
     int didS1InterruptRequested = isS1IRQ();
 
+    if(didS1InterruptRequested) {
+    	isS1Pressed = !isS1Pressed;
 
-    if(!didS1InterruptRequested) {
+        if(isS1Pressed) {
+            toggleLED2(TRUE);
+        }
 
-    } else {
-    	isS1Pressed = TRUE; // will be always true if it reaches this line
-
-    	int wasS1Pressed = isS1Pressed && !didS1Pressed;
-
-    	if(wasS1Pressed) {
-    		toggleLED2(TRUE);
-    		didS1Pressed = TRUE;
-    	}
+        toggleS1InterruptMode(!isS1Pressed); // make next interrupt routine to be called when button will be released
     }
 
     endS1IRQ();
 }
 
-// will be called when button released
+// will be called when button fired
 #pragma vector = PORT2_VECTOR
 __interrupt void handleButton2InterruptRoutine() {
-    // TODO: ensure it's a right way to check IRQ register source
     int didS2InterruptRequested = isS2IRQ();
 
-    if(!didS2InterruptRequested) {
+    if(didS2InterruptRequested) {
+    	isS2Pressed = !isS2Pressed;
 
-    } else {
-    	isS2Pressed = TRUE;
-    	int isS2Released = TRUE; // TODO: maybe wrong
+        if(!isS2Pressed && !isS1Pressed) {
+            toggleLED2(FALSE);
+        }
 
-    	if(!isS1Pressed && isS2Released) {
-    		toggleLED2(FALSE);
-    	}
+        if (isS1Pressed && !isS1Pressed) {
+            isLED1Enabled = !isLED1Enabled;
+            toggleLED1(isLED1Enabled);
+        }
+
+        toggleS2InterruptMode(!isS2Pressed); // make next interrupt routine to be called when button will be released
     }
-
 
     endS2IRQ();
 }

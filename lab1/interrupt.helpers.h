@@ -38,3 +38,19 @@ int isS1IRQ() {
 int isS2IRQ() {
     return (P2IFG & BIT2) == BIT2 ? TRUE : FALSE;
 }
+
+int toggleS1InterruptMode(int fallingMode) {
+    if (fallingMode) {
+        P1IES |= BIT7; // interrupts generated at failing edge (from high to low)
+    } else {
+        P1IES &= ~BIT7; // interrupts generated at raising edge (from low to high)
+    }
+}
+
+int toggleS2InterruptMode(int fallingMode) {
+    if (fallingMode) {
+        P2IES |= BIT2; // interrupts generated at failing edge (from high to low)
+    } else {
+        P2IES &= ~BIT2; // interrupts generated at raising edge (from low to high)
+    }
+}
