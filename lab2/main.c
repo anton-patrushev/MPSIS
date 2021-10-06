@@ -21,7 +21,7 @@ int main(void) {
 	setup();
 
 	runApp();
-	
+
 	return 0;
 }
 
@@ -31,37 +31,43 @@ int isMCLKFrequencyModeChanged = FALSE;
 
 #pragma vector = PORT1_VECTOR
 __interrupt void handleS1InterruptRoutine() {
-    int didS1InterruptRequested = isS1IRQ();
+	int didS1InterruptRequested = isS1IRQ();
 
-    if(didS1InterruptRequested) {
-        if(isLPMEnabled) {
-            exitLPM4();
-        } else {
-            enterLPM4();
-        }
+	if(!didS1InterruptRequested) {
+		return;
+	}
 
-        isLPMEnabled = !isLPMEnabled;
-        //__delay_cycles(160000);
+	delayInterruptRoutineExecution(1488);
+
+    if(isLPMEnabled) {
+    	__bic_SR_register_on_exit(LPM4_bits); // exit LPM
+    	isLPMEnabled = FALSE;
+
+    } else {
+    	isLPMEnabled = TRUE;
+      __bis_SR_register_on_exit(LPM4_bits); // enter LPM
     }
 
     endS1IRQ();
 }
 
-
 #pragma vector = PORT2_VECTOR
 __interrupt void handleS2InterruptRoutine() {
     int didS2InterruptRequested = isS2IRQ();
 
-    if(didS2InterruptRequested) {
-        if(isMCLKFrequencyModeChanged) {
-            setMCLKDefaultConfiguration();
-        } else {
-            setMCLKDividedFrequencyConfiguration();
-        }
-
-        //__delay_cycles(160000);
-        isMCLKFrequencyModeChanged = !isMCLKFrequencyModeChanged;
+    if(!didS2InterruptRequested) {
+    	return;
     }
+
+//	delayInterruptRoutineExecution(1488);
+
+    if(isMCLKFrequencyModeChanged) {
+    	setMCLKDefaultConfiguration();
+    } else {
+    	setMCLKDividedFrequencyConfiguration();
+    }
+
+    isMCLKFrequencyModeChanged = !isMCLKFrequencyModeChanged;
 
     endS2IRQ();
 }

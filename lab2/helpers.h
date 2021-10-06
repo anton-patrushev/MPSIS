@@ -49,12 +49,21 @@ void setupOscillographOutput() {
     P7SEL |= BIT7; // make P7.7 pin set up for peripheral module
 }
 
-void enterLPM4() {
-    __bis_SR_register(LPM4_bits); // enter LPM
-}
+//void enterLPM4() {
+//	__bis_SR_register_on_exit(LPM4_bits); // enter LPM
+//}
+//
+//void exitLPM4() {
+//	__bic_SR_register_on_exit(LPM4_bits); // enter LPM
+//}
 
-void exitLPM4() {
-    __bic_SR_register(LPM4_bits); // enter LPM
+void delayInterruptRoutineExecution(volatile int ms) {
+    volatile int i;
+    volatile int k = 1;
+
+    for (i = 0; i < ms; i++) {
+        k++;
+    }
 }
 
 void setupDCOCLK() {
@@ -76,5 +85,5 @@ void setMCLKDefaultConfiguration() {
 
 void setMCLKDividedFrequencyConfiguration() {
     UCSCTL4 = SELM__REFOCLK;
-    UCSCTL5 |= DIVM__4;
+    UCSCTL5 = DIVM__4;
 }
