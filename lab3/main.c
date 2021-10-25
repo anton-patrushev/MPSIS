@@ -18,12 +18,6 @@ int isLEDsBlinkingEnabled = TRUE;
 /********************************************* End Control Flags ***************************************** */
 
 /********************************************* Utils ***************************************** */
-
-void disableWatchDogTimer() {
-	SFRIE1 &= ~WDTIE; // disable watchdog interval mode
-	WDTCTL = WDTPW | WDTHOLD;
-}
-
 void enableInterruptions() {
   __bis_SR_register(GIE); // set GIE flag to 1 (Global Interruptions Enabled)
   __enable_interrupt(); // enable Maskable IRQs
@@ -45,20 +39,30 @@ void setupButtons() {
   P2IFG &= ~BIT2; // clear interrupt flag
 }
 
+void disableWatchDogTimer() {
+	SFRIE1 &= ~WDTIE; // disable watchdog interval mode
+	WDTCTL = WDTPW | WDTHOLD;
+}
+
+
 void enableWDTIntervalMode() {
 	SFRIE1 |= WDTIE; // enable watchdog interval mode
 	// WDTTMSEL - enables mode selection
 	// WDTCNTCL - clears WTD counter
 
-	// TODO: ensure it correct
-	// WTDIS - interval select; 
+	// WTDTIS - interval select; 
+	// WDTSSEL_0 - source = ACLK
 
-	// WDTCTL = WDTPW | WDTTMSEL | WDTCNTCL | WDTSSEL_0 | WDTIS_5;
-
-	// (WDTPW+WDTTMSEL+WDTCNTCL+WDTIS2+WDTIS1) ~ 0.5ms
+	// from the header file - (WDTPW+WDTTMSEL+WDTCNTCL+WDTIS2+WDTIS1) ~ 0.5ms
 	WDTCTL = WDT_MDLY_0_5;
 }
 
+
+// TODO: implement
+void disableTA1() {}
+
+// TODO: implement
+void enableTA1() {}
 
 
 void enableLED1(int turnOn) { P1OUT |= BIT0; }
@@ -113,13 +117,35 @@ int toggleS2InterruptMode() {
 void toggleSelectedTimer() {
 	if (isTimerA1Selected) {
 		isTimerA1Selected = FALSE;
-		// disableTA1Timer();
+		// TODO: support TA1
+		disableTA1();
 		enableWDTIntervalMode();
 	} else {
 		isTimerA1Selected = TRUE;
 		disableWatchDogTimer();
- 		// enableTA1Timer();
+		// TODO: support TA1
+ 		enableTA1();
 	}
+}
+
+void disableSelectedTimer() { 
+	if (isTimerA1Selected) {
+		disableTA1()
+	} else {
+		disableWatchDogTimer();
+	}
+}
+
+void enableSelectedTimer() { 
+	if (isTimerA1Selected) {
+		enableSelectedTimer()
+	} else {
+		enableWDTIntervalMode();
+	}
+}
+
+void makeTA03Peripheral() {
+	P1SEL |= BIT4; // 0 - I/0; 1 - Peripheral
 }
 
 /********************************************* End Utils ***************************************** */
@@ -152,22 +178,19 @@ __interrupt void WDT_ISR(void) {
 __interrupt void S1ISR() {
   int didS1InterruptRequested = isS1IRQ();
 	
-  if (didS1InterruptRequested) { return; }
+  if (!didS1InterruptRequested) { return; }
 
-	int isS1Pressed = isLEDsBlinkingEnabled ? FALSE : TRUE;
 
-	if (isS1Pressed) {
+	if (isLEDsBlinkingEnabled) {
 		isLEDsBlinkingEnabled = FALSE;
-		// TODO: support TA1
-		disableWatchDogTimer();
+		disableSelectedTimer();
 
 		disableLED1();
 		disableLED2();
 		disableLED3();
 	} else {
 		isLEDsBlinkingEnabled = TRUE;
-		// TODO: support TA1
-		enableWDTIntervalMode();
+		enableSelectedTimer();
 	}
 
   toggleS1InterruptMode();
@@ -179,7 +202,7 @@ __interrupt void S1ISR() {
 __interrupt void S2ISR() {
   int didS2InterruptRequested = isS2IRQ();
 
-  if (didS2InterruptRequested) { return; }
+  if (!didS2InterruptRequested) { return; }
 
   toggleSelectedTimer();
 
@@ -195,8 +218,12 @@ int runApp() {
 int main(void) {
 	disableWatchDogTimer();
 
+	// TODO: configure and init TA1
+
 	setupLEDs();
 	setupButtons();
+
+	makeTA03Peripheral();
 
 	enableInterruptions();
 
