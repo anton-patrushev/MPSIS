@@ -11,7 +11,7 @@ int period = 700 * 2;
 int period_x2 = period * 2;
 int period_x3 = period * 3;
 
-int isTimerA1Selected = TRUE;
+int isTimerA1Selected = FALSE;
 
 int isLEDsBlinkingEnabled = TRUE;
 
@@ -60,20 +60,19 @@ void enableWDTIntervalMode() {
 }
 
 
-// TODO: implement
-void disableTA1() {}
+void disableTA1() {
+	TA1CCTL0 &= ~CCIE; // disable interrupts
+	TA1CTL = MC__STOP; // stop timer
+}
 
-// TODO: implement
 void enableTA1() {
-	TA1CCTL0 = CCIE; // enable interrupts for TA1
-
-	// MC_3 - UP-DOWN mode
-	// ID__8 - divider '/8'
-	// TASSEL_1 - use ACLK
-	TA1CTL = TASSEL_1 + MC_3 + ID__8; 
-
-	// TODO: real value
-	TA1CCR0 = 10485;
+	// TASSEL__ACLK - choose ACLK as the source signal
+	// MC__UP - UP mode
+	// TACLR - clear timer
+	// ID__1 - clear timer
+	TA1CTL = TASSEL__ACLK | MC__UP | ID__1 | TACLR;
+	TA1CCTL0 = CCIE; // enable interrupts for TA1 capture register 0=
+	TA1CCR0 = 22400; // period = 0.7 sec, (ACLK * 0.7) = 32k * 0.7 = 22400
 }
 
 
@@ -129,13 +128,13 @@ int toggleS2InterruptMode() {
 void toggleSelectedTimer() {
 	if (isTimerA1Selected) {
 		isTimerA1Selected = FALSE;
-		// TODO: support TA1
+
 		disableTA1();
 		enableWDTIntervalMode();
 	} else {
 		isTimerA1Selected = TRUE;
+
 		disableWatchDogTimer();
-		// TODO: support TA1
  		enableTA1();
 	}
 }
@@ -150,7 +149,7 @@ void disableSelectedTimer() {
 
 void enableSelectedTimer() { 
 	if (isTimerA1Selected) {
-		enableSelectedTimer()
+		enableTA1()
 	} else {
 		enableWDTIntervalMode();
 	}
@@ -178,14 +177,33 @@ void bar() {
 
 // ISR for CCIFG flag - from 0 to TACCR0 value
 #pragma vector = TIMER1_A0_VECTOR
-__interrupt void WDT_ISR(void) {
+__interrupt void TA1_CCR0_ISR(void) {
+	interruptsCount += period;
+
+	switch (interruptsCount) {
+	case period:
+		enableLED1();
+		disableLED2();
+		break;
+	case period_x2:
+		enableLED2();
+		disableLED3();
+		break;
+	case period_x3:
+		enableLED3();
+		disableLED1();
+
+		interruptsCount = 0;
+		break;
+	}
 }
 
-// ISR for TAIFG flag - from TACCR0 value to 0
-#pragma vector = TIMER1_A1_VECTOR
-__interrupt void WDT_ISR(void) {
+// Unused
+// // ISR for TAIFG flag - from TACCR0 value to 0
+// #pragma vector = TIMER1_A1_VECTOR
+// __interrupt void WDT_ISR(void) {
 
-}
+// }
 
 
 #pragma vector = WDT_VECTOR
@@ -242,6 +260,7 @@ __interrupt void S2ISR() {
   if (!didS2InterruptRequested) { return; }
 
   toggleSelectedTimer();
+	interruptsCount = 0;
 
   endS2IRQ();
 }
@@ -252,20 +271,21 @@ int runApp() {
 }
 
 
+// * SMCLK ~ 1 MHz by default
+// * ACLK ~ 32 kHz by default
+// * according to this
+// https://e2e.ti.com/support/microcontrollers/msp-low-power-microcontrollers-group/msp430/f/msp-low-power-microcontroller-forum/265568/default-frequency-of-msp430-without-connecting-any-crystal
 int main(void) {
 	disableWatchDogTimer();
 
 	setupTA0();
 
-	// TODO: configure and init TA1
-
 	setupLEDs();
 	setupButtons();
 
-	enableInterruptions();
+	enableSelectedTimer();
 
-	// TODO: initialize SMCLK ~ 1 MHz
-	// TODO: initialize ACLK ~ 32 kHz
+	enableInterruptions();
 
 	runApp();
 
