@@ -11,7 +11,7 @@ int period = 700 * 2;
 int period_x2 = period * 2;
 int period_x3 = period * 3;
 
-int isTimerA1Selected = FALSE;
+int isTimerA1Selected = TRUE;
 
 int isLEDsBlinkingEnabled = TRUE;
 
@@ -40,6 +40,8 @@ void setupButtons() {
 }
 
 void disableWatchDogTimer() {
+	interruptsCount = 0;
+
 	SFRIE1 &= ~WDTIE; // disable watchdog interval mode
 	WDTCTL = WDTPW | WDTHOLD;
 }
@@ -51,8 +53,8 @@ void enableWDTIntervalMode() {
 	// WDTCNTCL - clears WTD counter
 
 	// WTDTIS - interval select; 
-	// WDTSSEL_0 - source = ACLK
 
+	// SMCLK is choosen as a source
 	// from the header file - (WDTPW+WDTTMSEL+WDTCNTCL+WDTIS2+WDTIS1) ~ 0.5ms
 	WDTCTL = WDT_MDLY_0_5;
 }
@@ -62,7 +64,17 @@ void enableWDTIntervalMode() {
 void disableTA1() {}
 
 // TODO: implement
-void enableTA1() {}
+void enableTA1() {
+	TA1CCTL0 = CCIE; // enable interrupts for TA1
+
+	// MC_3 - UP-DOWN mode
+	// ID__8 - divider '/8'
+	// TASSEL_1 - use ACLK
+	TA1CTL = TASSEL_1 + MC_3 + ID__8; 
+
+	// TODO: real value
+	TA1CCR0 = 10485;
+}
 
 
 void enableLED1(int turnOn) { P1OUT |= BIT0; }
@@ -144,11 +156,36 @@ void enableSelectedTimer() {
 	}
 }
 
-void makeTA03Peripheral() {
+void setupLED7() {
+	P1DIR |= BIT0; // make LED_CTP_4 output
 	P1SEL |= BIT4; // 0 - I/0; 1 - Peripheral
 }
 
+void setupTA0() {
+	TA0CTL = TASSEL__ACLK | ID__1 | MC__UPDOWN | TACLR;
+	TA0CCTL1 = OUTMOD_7; // ask 1-st capture register to set output mode 7 (SET / RESET)
+	TA0CCR0 = 24000; // ~ 24 000 counts = 1.5 sec / 2 = 0.75 
+	TA0CCR1 = 16000; // ~ 16 000 counts = 0.75 - (1.5 sec / 6) = 0.5
+
+	setupLED7();
+}
+
 /********************************************* End Utils ***************************************** */
+
+void bar() {
+	
+}
+
+// ISR for CCIFG flag - from 0 to TACCR0 value
+#pragma vector = TIMER1_A0_VECTOR
+__interrupt void WDT_ISR(void) {
+}
+
+// ISR for TAIFG flag - from TACCR0 value to 0
+#pragma vector = TIMER1_A1_VECTOR
+__interrupt void WDT_ISR(void) {
+
+}
 
 
 #pragma vector = WDT_VECTOR
@@ -218,14 +255,17 @@ int runApp() {
 int main(void) {
 	disableWatchDogTimer();
 
+	setupTA0();
+
 	// TODO: configure and init TA1
 
 	setupLEDs();
 	setupButtons();
 
-	makeTA03Peripheral();
-
 	enableInterruptions();
+
+	// TODO: initialize SMCLK ~ 1 MHz
+	// TODO: initialize ACLK ~ 32 kHz
 
 	runApp();
 
