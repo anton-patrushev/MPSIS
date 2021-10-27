@@ -11,7 +11,7 @@ volatile int interruptsCount = 0;
 #define period_x2 2800 // 700 * 2 * 2
 #define period_x3 4200 // 700 * 2 * 3
 
-int isTimerA1Selected = FALSE;
+int isTimerA1Selected = TRUE;
 
 /********************************************* End Control Flags ***************************************** */
 
@@ -161,6 +161,7 @@ void enableSelectedTimer() {
 
 void setupLED7() {
     P1DIR |= BIT4; // make LED_CTP_4 output
+	  P1OUT &= ~BIT4;
     P1SEL |= BIT4; // 0 - I/0; 1 - Peripheral
 }
 
@@ -170,20 +171,16 @@ void setupTA0() {
 //    TA0CTL = TASSEL__ACLK | ID__1 | MC__UPDOWN | TACLR;
 //    TA0EX0 = TAIDEX_0;
 //    TA0CCTL2 = OUTMOD_7; // ask 1-st capture register to set output mode 7 (SET / RESET)
-//
-//    TA0CCR0 = 24000; // ~ 24 000 counts = 1.5 sec / 2 = 0.75
-//    TA0CCR2 = 16000; // ~ 16 000 counts = 0.75 - (1.5 sec / 6) = 0.5
+  setupLED7();
 
-	P1DIR |= BIT4;
-	P1OUT &= ~BIT4;
-	P1SEL |= BIT4;
+	TA0CCR0 = 24000; // ~ 24 000 counts = 1.5 sec / 2 = 0.75
+	TA0CCR3 = 16000; // ~ 16 000 counts = 0.75 - (1.5 sec / 6) = 0.5
+	TA0CCTL3 = OUTMOD_7; // (SET / RESET)
 
-	TA0CCR0 = 24000;
-	TA0CCR3 = 16000;
-	TA0CCTL3 = OUTMOD_7;
+	// /8 * /4 = /32 - SMCLK / 32 = ACLK
 
-	TA0EX0 = TAIDEX_5;
-	TA0CTL = TASSEL__SMCLK | ID_3 | MC_1 | TACLR;
+	TA0EX0 = TAIDEX_7; // /8
+	TA0CTL = TASSEL__SMCLK | ID__4 | MC__UPDOWN | TACLR;
 }
 
 /********************************************* End Utils ***************************************** */
