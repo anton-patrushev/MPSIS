@@ -242,6 +242,7 @@ __interrupt void S1ISR() {
 
   if (isS1FallingMode()) {
     disableSelectedTimer();
+    interruptsCount = 0;
     
     disableLED1();
     disableLED2();
