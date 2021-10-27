@@ -166,11 +166,6 @@ void setupLED7() {
 }
 
 void setupTA0() {
-//    setupLED7();
-//
-//    TA0CTL = TASSEL__ACLK | ID__1 | MC__UPDOWN | TACLR;
-//    TA0EX0 = TAIDEX_0;
-//    TA0CCTL2 = OUTMOD_7; // ask 1-st capture register to set output mode 7 (SET / RESET)
   setupLED7();
 
 	TA0CCR0 = 24000; // ~ 24 000 counts = 1.5 sec / 2 = 0.75
@@ -245,20 +240,15 @@ __interrupt void S1ISR() {
 
   if (!didS1InterruptRequested) { return; }
 
-//  delayInterruptRoutineExecution(1488);
-
-
-    if (isS1FallingMode()) {
-//        isLEDsBlinkingEnabled = FALSE;
-        disableSelectedTimer();
-
-        disableLED1();
-        disableLED2();
-        disableLED3();
-    } else {
-//        isLEDsBlinkingEnabled = TRUE;
-        enableSelectedTimer();
-    }
+  if (isS1FallingMode()) {
+    disableSelectedTimer();
+    
+    disableLED1();
+    disableLED2();
+    disableLED3();
+  } else {
+    enableSelectedTimer();
+  }
 
   toggleS1InterruptMode();
 
@@ -276,6 +266,7 @@ __interrupt void S2ISR() {
 
   // not sure we need to perform this
   // but just in case
+  // requirements are not clear for this
   disableLED1();
   disableLED2();
   disableLED3();
