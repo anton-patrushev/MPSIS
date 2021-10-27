@@ -5,19 +5,19 @@
 
 /********************************************* Control Flags ***************************************** */
 
-int interruptsCount = 0;
+volatile int interruptsCount = 0;
 
-const int period = 700 * 2;
-const int period_x2 = period * 2;
-const int period_x3 = period * 3;
+#define period 1400 // 700 * 2
+#define period_x2 2800 // 700 * 2 * 2
+#define period_x3 4200 // 700 * 2 * 3
 
 int isTimerA1Selected = FALSE;
-
-int isLEDsBlinkingEnabled = TRUE;
 
 /********************************************* End Control Flags ***************************************** */
 
 /********************************************* Utils ***************************************** */
+
+
 void enableInterruptions() {
   __bis_SR_register(GIE); // set GIE flag to 1 (Global Interruptions Enabled)
   __enable_interrupt(); // enable Maskable IRQs
@@ -82,8 +82,8 @@ void disableLED1() { P1OUT &= ~BIT0; }
 void enableLED2() { P8OUT |= BIT1; }
 void disableLED2() { P8OUT &= ~BIT1; }
 
-void enableLED3() { P8OUT |= BIT3; }
-void disableLED3() { P8OUT &= ~BIT3; }
+void enableLED3() { P8OUT |= BIT2; }
+void disableLED3() { P8OUT &= ~BIT2; }
 
 void setupLEDs() {
   P1DIR |= BIT0; // make LED1 output
@@ -92,7 +92,7 @@ void setupLEDs() {
   P8DIR |= BIT1; // make LED2 output
   disableLED2(); // make LED2 off by default
 
-	P8DIR |= BIT3; // make LED2 output
+  P8DIR |= BIT2; // make LED2 output
   disableLED3(); // make LED2 off by default
 }
 
@@ -103,21 +103,25 @@ void endS2IRQ() { P2IFG &= ~BIT2; }
 int isS1IRQ() { return (P1IFG & BIT7) == BIT7 ? TRUE : FALSE; }
 int isS2IRQ() { return (P2IFG & BIT2) == BIT2 ? TRUE : FALSE; }
 
-int toggleS1InterruptMode() {
-  int isFallingModeEnabled = (int)(P1IES & BIT7) != 0 ? FALSE : TRUE;
+int isS1FallingMode() { return (int)(P1IES & BIT7) != 0 ? TRUE : FALSE; }
 
-  if (isFallingModeEnabled) {
+int toggleS1InterruptMode() {
+//  int isFallingModeEnabled = (int)(P1IES & BIT7) != 0 ? FALSE : TRUE;
+
+  if (isS1FallingMode()) {
     P1IES &= ~BIT7; // interrupts generated at raising edge (from low to high)
   } else {
     P1IES |= BIT7; // interrupts generated at falling edge (from high to low)
   }
 }
 
+int isS2FallingMode() { return (int)(P2IES & BIT2) == 0 ? TRUE : FALSE; }
+
 // TODO: is it required?
 int toggleS2InterruptMode() {
-  int isFallingModeEnabled = (int)(P2IES & BIT2) == 0 ? FALSE : TRUE;
+//  int isFallingModeEnabled = (int)(P2IES & BIT2) == 0 ? FALSE : TRUE;
 
-  if (isFallingModeEnabled) {
+  if (isS2FallingMode()) {
     P2IES &= ~BIT2; // interrupts generated at raising edge (from low to high)
   } else {
     P2IES |= BIT2; // interrupts generated at falling edge (from high to low)
@@ -156,24 +160,33 @@ void enableSelectedTimer() {
 }
 
 void setupLED7() {
-    P1DIR |= BIT0; // make LED_CTP_4 output
+    P1DIR |= BIT4; // make LED_CTP_4 output
     P1SEL |= BIT4; // 0 - I/0; 1 - Peripheral
 }
 
 void setupTA0() {
-    TA0CTL = TASSEL__ACLK | ID__1 | MC__UPDOWN | TACLR;
-    TA0CCTL1 = OUTMOD_7; // ask 1-st capture register to set output mode 7 (SET / RESET)
-    TA0CCR0 = 24000; // ~ 24 000 counts = 1.5 sec / 2 = 0.75
-    TA0CCR1 = 16000; // ~ 16 000 counts = 0.75 - (1.5 sec / 6) = 0.5
+//    setupLED7();
+//
+//    TA0CTL = TASSEL__ACLK | ID__1 | MC__UPDOWN | TACLR;
+//    TA0EX0 = TAIDEX_0;
+//    TA0CCTL2 = OUTMOD_7; // ask 1-st capture register to set output mode 7 (SET / RESET)
+//
+//    TA0CCR0 = 24000; // ~ 24 000 counts = 1.5 sec / 2 = 0.75
+//    TA0CCR2 = 16000; // ~ 16 000 counts = 0.75 - (1.5 sec / 6) = 0.5
 
-    setupLED7();
+	P1DIR |= BIT4;
+	P1OUT &= ~BIT4;
+	P1SEL |= BIT4;
+
+	TA0CCR0 = 24000;
+	TA0CCR3 = 16000;
+	TA0CCTL3 = OUTMOD_7;
+
+	TA0EX0 = TAIDEX_5;
+	TA0CTL = TASSEL__SMCLK | ID_3 | MC_1 | TACLR;
 }
 
 /********************************************* End Utils ***************************************** */
-
-void bar() {
-
-}
 
 // ISR for CCIFG flag - from 0 to TACCR0 value
 #pragma vector = TIMER1_A0_VECTOR
@@ -199,10 +212,10 @@ __interrupt void TA1_CCR0_ISR(void) {
 }
 
 // Unused
-// // ISR for TAIFG flag - from TACCR0 value to 0
+ // ISR for TAIFG flag - from TACCR0 value to 0
 // #pragma vector = TIMER1_A1_VECTOR
 // __interrupt void WDT_ISR(void) {
-
+//
 // }
 
 
@@ -235,16 +248,18 @@ __interrupt void S1ISR() {
 
   if (!didS1InterruptRequested) { return; }
 
+//  delayInterruptRoutineExecution(1488);
 
-    if (isLEDsBlinkingEnabled) {
-        isLEDsBlinkingEnabled = FALSE;
+
+    if (isS1FallingMode()) {
+//        isLEDsBlinkingEnabled = FALSE;
         disableSelectedTimer();
 
         disableLED1();
         disableLED2();
         disableLED3();
     } else {
-        isLEDsBlinkingEnabled = TRUE;
+//        isLEDsBlinkingEnabled = TRUE;
         enableSelectedTimer();
     }
 
@@ -260,7 +275,13 @@ __interrupt void S2ISR() {
   if (!didS2InterruptRequested) { return; }
 
   toggleSelectedTimer();
-    interruptsCount = 0;
+  interruptsCount = 0;
+
+  // not sure we need to perform this
+  // but just in case
+  disableLED1();
+  disableLED2();
+  disableLED3();
 
   endS2IRQ();
 }
