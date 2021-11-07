@@ -21,8 +21,8 @@ typedef unsigned char uint8_t;
 #define SET_ADV_PROGRAM_CONTROL0_MSB  0xFA // Расширенное управление. ТС — температурная компенсация 0 = -0.05, 1 = -0.11 % / °С;
 #define SET_ADV_PROGRAM_CONTROL0_LSB  0x90 // WC – циклический сдвиг столбцов 0 = нет, 1 = есть; WP –циклический сдвиг страниц 0 = нет, 1 = есть.
 
-#define CD              BIT6
-#define CS              BIT4
+#define CD              BIT6 // CD - choose device mode (BIT6 -> P5.6)
+#define CS              BIT4 // CS - choose slave device (BIT4 -> P7.4)
 
 uint8_t Dogs102x6_initMacro[] = {
 	SET_SCROLL_LINE,
@@ -124,22 +124,36 @@ __interrupt void buttonS2(void)
 	P2IFG = 0;
 }
 
-int main(void) {
+void disableWatchDogTimer() {
 	WDTCTL = WDTPW | WDTHOLD;
+}
 
-	P1DIR &= ~BIT7;
-	P1OUT |= BIT7;
-	P1REN |= BIT7;
-	P1IE |= BIT7;
-	P1IES |= BIT7;
-	P1IFG = 0;
+void setupButtons() {
+  P1DIR &= ~BIT7; // make S1 input
+  P1REN |= BIT7; // enable pull up/down resistor for S1
+  P1OUT |= BIT7; // select pull up resistor (not pressed - high, pressed - low state)
+  P1IE |= BIT7; // enable interrupts for S1
+  P1IES |= BIT7; // interrupts generated at falling edge (from high to low)
+  P1IFG &= ~BIT7; // clear interrupt flag
 
-	P2DIR &= ~BIT2;
-	P2OUT |= BIT2;
-	P2REN |= BIT2;
-	P2IE |= BIT2;
-	P2IES |= BIT2;
-	P2IFG = 0;
+  P2DIR &= ~BIT2; // make S2 input
+  P2REN |= BIT2; // enable pull up/down resistor for S2
+  P2OUT |= BIT2; // select pull up resistor (not pressed - high, pressed - low state)
+  P2IE |= BIT2; // enable interrupts for S2
+  P2IES |= BIT2; // interrupts generated at falling edge (from high to low)
+  P2IFG &= ~BIT2; // clear interrupt flag
+}
+
+void setupResetSignal() {
+	P5DIR |= BIT7; // output direction
+	P5OUT &= ~BIT7; // RST = 0
+	P5OUT |= BIT7; // RST = 1
+}
+
+int main(void) {
+	disableWatchDogTimer();
+
+	setupButtons();
 
 	Dogs102x6_init();
 	Dogs102x6_backlightInit();
@@ -250,7 +264,7 @@ void Dogs102x6_setAddress(uint8_t pa, uint8_t ca)
 void Dogs102x6_writeData(uint8_t* sData, uint8_t i)
 {
 	P7OUT &= ~CS;
-	P5OUT |= CD;
+	P5OUT |= CD; // 1 - data mode
 
 	while (i)
 	{
@@ -300,22 +314,23 @@ void Dogs102x6_backlightInit(void)
 
 void Dogs102x6_init(void)
 {
-	P5DIR |= BIT7; // установка на выход
-	P5OUT &= BIT7;
-	P5OUT |= BIT7;
+	setupResetSignal();
 
-	P7DIR |= CS;
+	P7DIR |= CS; // output direction
 
-	P5DIR |= CD;
-	P5OUT &= ~CD;
+	P5DIR |= CD; // output direction
+	P5OUT &= ~CD; // 0 - command mode
 
-	P4SEL |= BIT1; // передача данных LCD_SIMO
-	P4DIR |= BIT1;
+	P4SEL |= BIT1; // data transmission - LCD_SIMO (SIMO - Slave In, Master Out)
+	P4DIR |= BIT1; // ?? - should be ignored
 
-	P4SEL |= BIT3; // синхросигнал SCLK
-	P4DIR |= BIT3;
+	P4SEL |= BIT3; // clock signal SCLK
+	P4DIR |= BIT3; // ?? - should be ignored
 
-	UCB1CTL1 = UCSSEL_2 + UCSWRST;
+	// UCSSEL__SMCLK - Select SMCLK as signal source
+	// UCSWRST - enable software reset
+	UCB1CTL1 = UCSSEL__SMCLK + UCSWRST;
+	
 	//3-pin, 8-bit SPI master
 	UCB1CTL0 = UCCKPH + UCMSB + UCMST + UCMODE_0 + UCSYNC;
 
