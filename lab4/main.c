@@ -21,6 +21,7 @@ typedef unsigned char uint8_t;
 #define SET_ADV_PROGRAM_CONTROL0_MSB  0xFA // Расширенное управление. ТС — температурная компенсация 0 = -0.05, 1 = -0.11 % / °С;
 #define SET_ADV_PROGRAM_CONTROL0_LSB  0x90 // WC – циклический сдвиг столбцов 0 = нет, 1 = есть; WP –циклический сдвиг страниц 0 = нет, 1 = есть.
 
+// CD: 0 - display choosen, 1 - controller choosen
 #define CD              BIT6 // CD - choose device mode (BIT6 -> P5.6)
 #define CS              BIT4 // CS - choose slave device (BIT4 -> P7.4)
 
@@ -38,9 +39,9 @@ uint8_t Dogs102x6_initMacro[] = {
 	SET_ADV_PROGRAM_CONTROL0_MSB,
 	SET_ADV_PROGRAM_CONTROL0_LSB,
 	SET_DISPLAY_ENABLE,
-	SET_PAGE_ADDRESS,
-	SET_COLUMN_ADDRESS_MSB,
-	SET_COLUMN_ADDRESS_LSB
+	// SET_PAGE_ADDRESS,
+	// SET_COLUMN_ADDRESS_MSB,
+	// SET_COLUMN_ADDRESS_LSB
 };
 
 uint8_t MODE_COMMANDS[2][1] = { {SET_SEG_DIRECTION}, {SET_SEG_DIRECTION | 1} };
@@ -235,20 +236,20 @@ void Dogs102x6_setAddress(uint8_t pa, uint8_t ca)
 {
 	uint8_t cmd[1];
 
-	if (pa > 7)
-	{
+	// 8 pages allowed
+	if (pa > 7) {
 		pa = 7;
 	}
 
-	if (ca > 101)
-	{
+	// actual screen size smaller than controller
+	if (ca > 101) {
 		ca = 101;
 	}
 
-	cmd[0] = SET_PAGE_ADDRESS + (7 - pa);
+	cmd[0] = SET_PAGE_ADDRESS + (7 - pa); // (7 - pa) - inverse pages
 	uint8_t H = 0x00;
 	uint8_t L = 0x00;
-	uint8_t ColumnAddress[] = { SET_COLUMN_ADDRESS_MSB, SET_COLUMN_ADDRESS_LSB };
+	uint8_t ColumnAddress[2];
 
 	L = (ca & 0x0F);
 	H = (ca & 0xF0);
@@ -266,9 +267,8 @@ void Dogs102x6_writeData(uint8_t* sData, uint8_t i)
 	P7OUT &= ~CS;
 	P5OUT |= CD; // 1 - data mode
 
-	while (i)
-	{
-		while (!(UCB1IFG & UCTXIFG));
+	while (i){
+		while (!(UCB1IFG & UCTXIFG)); // wait for controller interruption (1 - Buffer is available for writing)
 
 		UCB1TXBUF = *sData;
 
@@ -285,12 +285,11 @@ void Dogs102x6_writeData(uint8_t* sData, uint8_t i)
 
 void Dogs102x6_writeCommand(uint8_t* sCmd, uint8_t i)
 {
-	P7OUT &= ~CS;
-	P5OUT &= ~CD;
+	P7OUT &= ~CS; // choose display
+	P5OUT &= ~CD; // enter command mode
 
-	while (i)
-	{
-		while (!(UCB1IFG & UCTXIFG));
+	while (i) {
+		while (!(UCB1IFG & UCTXIFG)); // wait for controller interruption (1 - Buffer is available for writing)
 
 		UCB1TXBUF = *sCmd;
 
@@ -298,16 +297,16 @@ void Dogs102x6_writeCommand(uint8_t* sCmd, uint8_t i)
 		i--;
 	}
 
-	while (UCB1STAT & UCBUSY);
-	// Dummy read to empty RX buffer and clear any overrun conditions
+	while (UCB1STAT & UCBUSY); // waiting for all data transmitted
+	// Dummy read to empty RX buffer and clear any overrun conditions (? clear UCRXIFG)
 	UCB1RXBUF;
 
-	P7OUT |= CS;
+	P7OUT |= CS; // choose controller
 }
 
 void Dogs102x6_backlightInit(void)
 {
-	P7DIR |= BIT6; // питание подсветки
+	P7DIR |= BIT6;
 	P7OUT |= BIT6;
 	P7SEL &= ~BIT6;
 }
@@ -334,10 +333,11 @@ void Dogs102x6_init(void)
 	//3-pin, 8-bit SPI master
 	UCB1CTL0 = UCCKPH + UCMSB + UCMST + UCMODE_0 + UCSYNC;
 
+	// Frequency delimiters
 	UCB1BR0 = 0x02;
 	UCB1BR1 = 0;
 
-	UCB1CTL1 &= ~UCSWRST;
+	UCB1CTL1 &= ~UCSWRST; // disable software reset (used to change some CTL registers)
 	UCB1IFG &= ~UCRXIFG;
 
 	Dogs102x6_writeCommand(Dogs102x6_initMacro, 13);
