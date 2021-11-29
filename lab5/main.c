@@ -51,6 +51,10 @@ int COLUMN_START_ADDRESS = 30; // 0 - default (30), 1 - mirror horizontal (0)
 int CURRENT_NUMBER = -5417;
 int SUM_NUMBER = +981;
 
+// --------------------------  B6 -- B5 -- B4 -- B3 - B2 - B1 - B0 ----
+int ACCELERATION_G_MASK[] = { 4571, 2286, 1141, 571, 286, 143, 71 };
+uint8_t ACCELERATION_BIT_MASK[] = { BIT6, BIT5, BIT4, BIT3, BIT2, BIT1, BIT0 };
+
 uint8_t symbols[12][11] = {
 	{0x00, 0x00, 0x20, 0x20, 0x20, 0xF8, 0x20, 0x20, 0x20, 0x00, 0x00}, // plus
 	{0x00, 0x00, 0x00, 0x00, 0x00, 0xF8, 0x00, 0x00, 0x00, 0x00, 0x00}, // minus
@@ -249,26 +253,29 @@ __interrupt void accelerometerISR(void) {
 	// }
 }
 
+int getProjectionGValueFromMaskByIndex(int index, int isNegative) {
+	if (isNegative) {
+		return projectionValue += (ACCELERATION_BIT_MASK[index] & projectionByte) ? 0 : ACCELERATION_G_MASK[index];
+	} else {
+		return projectionValue += (ACCELERATION_BIT_MASK[index] & projectionByte) ? ACCELERATION_G_MASK[index] : 0;
+	}
+}
 
-// long int parseProjectionByte(uint8_t projectionByte) {
-// 	int i = 0;
-// 	long int projectionValue = 0;
 
-// 	int isNegative = projectionByte & BIT7;
+long int parseProjectionByte(uint8_t projectionByte) {
+	int i = 0;
+	long int projectionValue = 0;
 
-// 	for (; i < 7; i++) {
-// 		if (isNegative) {
-// 			projectionValue += (BITx[i] & projectionByte) ? 0 : MAPPING_VALUES[i];
-// 		}
-// 		else {
-// 			projectionValue += (BITx[i] & projectionByte) ? MAPPING_VALUES[i] : 0;
-// 		}
-// 	}
+	int isNegative = projectionByte & BIT7;
 
-// 	projectionValue *= isNegative ? -1 : 1;
+	for (; i < 7; i++) {
+		projectionValue = getProjectionGValueFromMaskByIndex(i, isNegative);
+	}
 
-// 	return projectionValue;
-// }
+	projectionValue *= isNegative ? -1 : 1;
+
+	return projectionValue;
+}
 
 // int calculateAngleFromProjection(double projection) {
 // 	projection /= 1000;
