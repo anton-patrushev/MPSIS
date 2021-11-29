@@ -56,7 +56,7 @@ int COLUMN_START_ADDRESS = 30; // 0 - default (30), 1 - mirror horizontal (0)
 // int SUM_NUMBER = +981;
 
 // 3600 * 3600 / 1609 * 9.81 -- convert to miles per hour^2
-long int CONVERT_TO_MILIES_PER_HOURS = 79020;
+// long int CONVERT_TO_MILIES_PER_HOURS = 79020;
 
 // --------------------------  B6 -- B5 -- B4 -- B3 - B2 - B1 - B0 ----
 int ACCELERATION_G_MASK[] = { 4571, 2286, 1141, 571, 286, 143, 71 };
@@ -96,9 +96,11 @@ double convertRadianToAngle(double radian);
 int getProjectionGValueFromMaskByIndex(int index, int isNegative);
 long int parseProjectionByte(uint8_t projectionByte);
 int getAngleByProjections(double xProjection, double yProjection);
+int convertGToMeterPerSeconds(int gValue);
 
 void setupLEDs();
 void handleAngleChanged(int angle);
+
 
 #pragma vector = PORT1_VECTOR
 __interrupt void buttonS1(void)
@@ -209,11 +211,10 @@ __interrupt void accelerometerISR(void) {
 	volatile long int xAxisProjection = parseProjectionByte(xProjectionRawByte);
 	volatile long int yAxisProjection = parseProjectionByte(yProjectionRawByte);
 
-	// TODO: change converting
-	volatile long int milesPerHourSquared = xAxisProjection * CONVERT_TO_MILIES_PER_HOURS;
+	volatile long int metersPerSecondsSquared = convertGToMeterPerSeconds(xAxisProjection);
 
 	Dogs102x6_clearScreen();
-	printNumber(milesPerHourSquared);
+	printNumber(metersPerSecondsSquared);
 
 	int angle = getAngleByProjections((double) xAxisProjection, (double) yAxisProjection);
 
@@ -268,6 +269,14 @@ int getAngleByProjections(double xProjection, double yProjection) {
 	double angle = convertRadianToAngle(radianAngle);
 
 	return (int) angle;
+}
+
+double METER_PER_SECONDS_COEFFICIENT = 9.80665;
+
+int convertGToMeterPerSeconds(int gValue) {
+	double meterPerSeconds = gValue * METER_PER_SECONDS_COEFFICIENT;
+	
+	return (int)(meterPerSeconds * 1000)
 }
 
 
