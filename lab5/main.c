@@ -44,12 +44,15 @@ uint8_t Dogs102x6_initMacro[] = {
 	// SET_COLUMN_ADDRESS_LSB
 };
 
-uint8_t MODE_COMMANDS[2][1] = { {SET_SEG_DIRECTION}, {SET_SEG_DIRECTION | 1} };
+// uint8_t MODE_COMMANDS[2][1] = { {SET_SEG_DIRECTION}, {SET_SEG_DIRECTION | 1} };
 
-int CURRENT_ORIENTATION = 0; // 0 - default, 1 - mirror horizontal
+// int CURRENT_ORIENTATION = 0; // 0 - default, 1 - mirror horizontal
 int COLUMN_START_ADDRESS = 30; // 0 - default (30), 1 - mirror horizontal (0)
-int CURRENT_NUMBER = -5417;
-int SUM_NUMBER = +981;
+// int CURRENT_NUMBER = -5417;
+// int SUM_NUMBER = +981;
+
+// 3600 * 3600 / 1609 * 9.81 -- convert to miles per hour^2
+long int CONVERT_TO_MILIES_PER_HOURS = 79020;
 
 // --------------------------  B6 -- B5 -- B4 -- B3 - B2 - B1 - B0 ----
 int ACCELERATION_G_MASK[] = { 4571, 2286, 1141, 571, 286, 143, 71 };
@@ -83,7 +86,15 @@ void Dogs102x6_backlightInit(void);
 void Dogs102x6_init(void);
 
 void CMA3000_init(void);
-uint8_t CMA3000_writeCommand(uint8_t firstByte, uint8_t secondByte)
+uint8_t CMA3000_writeCommand(uint8_t firstByte, uint8_t secondByte);
+
+double convertRadianToAngle(double radian);
+int getProjectionGValueFromMaskByIndex(int index, int isNegative);
+long int parseProjectionByte(uint8_t projectionByte);
+int getAngleByProjections(double xProjection, double yProjection);
+
+void setupLEDs();
+void handleAngleChanged(int angle);
 
 #pragma vector = PORT1_VECTOR
 __interrupt void buttonS1(void)
@@ -105,51 +116,8 @@ __interrupt void buttonS1(void)
 	P1IFG = 0;
 }
 
-#pragma vector = PORT2_VECTOR
-__interrupt void buttonS2(void)
-{
-	volatile int i = 0;
-
-	for (i = 0; i < 2000; i++);
-
-	if ((P2IN & BIT2) == 0) {
-		if (CURRENT_ORIENTATION == 0) {
-			COLUMN_START_ADDRESS = 0;
-			CURRENT_ORIENTATION = 1;
-		}
-		else {
-			COLUMN_START_ADDRESS = 30;
-			CURRENT_ORIENTATION = 0;
-		}
-
-		Dogs102x6_writeCommand(MODE_COMMANDS[CURRENT_ORIENTATION], 1);
-		Dogs102x6_clearScreen();
-		printNumber();
-
-		for (i = 0; i < 2000; i++);
-	}
-
-	P2IFG = 0;
-}
-
 void disableWatchDogTimer() {
 	WDTCTL = WDTPW | WDTHOLD;
-}
-
-void setupButtons() {
-  P1DIR &= ~BIT7; // make S1 input
-  P1REN |= BIT7; // enable pull up/down resistor for S1
-  P1OUT |= BIT7; // select pull up resistor (not pressed - high, pressed - low state)
-  P1IE |= BIT7; // enable interrupts for S1
-  P1IES |= BIT7; // interrupts generated at falling edge (from high to low)
-  P1IFG &= ~BIT7; // clear interrupt flag
-
-  P2DIR &= ~BIT2; // make S2 input
-  P2REN |= BIT2; // enable pull up/down resistor for S2
-  P2OUT |= BIT2; // select pull up resistor (not pressed - high, pressed - low state)
-  P2IE |= BIT2; // enable interrupts for S2
-  P2IES |= BIT2; // interrupts generated at falling edge (from high to low)
-  P2IFG &= ~BIT2; // clear interrupt flag
 }
 
 void setupResetSignal() {
@@ -231,18 +199,23 @@ uint8_t CMA3000_writeCommand(uint8_t firstByte, uint8_t secondByte) {
 
 #pragma vector = PORT2_VECTOR
 __interrupt void accelerometerISR(void) {
-	// volatile uint8_t xProjectionByte = CMA3000_writeCommand(READ_X_AXIS_DATA, NONE);
-	// volatile uint8_t zProjectionByte = CMA3000_writeCommand(READ_Z_AXIS_DATA, NONE);
+	volatile uint8_t xProjectionRawByte = CMA3000_writeCommand(READ_X_AXIS_G_DATA, NONE);
+	volatile uint8_t yProjectionRawByte = CMA3000_writeCommand(READ_Y_AXIS_G_DATA, NONE);
 
-	// volatile long int xAxisProjection = parseProjectionByte(xProjectionByte);
-	// volatile long int zAxisProjection = parseProjectionByte(zProjectionByte);
+	volatile long int xAxisProjection = parseProjectionByte(xProjectionRawByte);
+	volatile long int yAxisProjection = parseProjectionByte(yProjectionRawByte);
 
-	// volatile long int milesPerHourSquared = xAxisProjection * CONVERT_TO_MILIES_PER_HOURS;
+	// TODO: change converting
+	volatile long int milesPerHourSquared = xAxisProjection * CONVERT_TO_MILIES_PER_HOURS;
 
-	// Dogs102x6_clearScreen();
-	// printNumber(milesPerHourSquared);
+	Dogs102x6_clearScreen();
+	printNumber(milesPerHourSquared);
 
-	// int angle = calculateAngleFromProjection((double) xAxisProjection);
+	int angle = getAngleByProjections((double) xAxisProjection, (double) yAxisProjection);
+
+	handleAngleChanged(angle);
+
+
 	// angle *= zAxisProjection <= 0 ? 1 : -1;
 
 	// if (-45 >= angle && angle >= -135) {
@@ -255,20 +228,19 @@ __interrupt void accelerometerISR(void) {
 
 int getProjectionGValueFromMaskByIndex(int index, int isNegative) {
 	if (isNegative) {
-		return projectionValue += (ACCELERATION_BIT_MASK[index] & projectionByte) ? 0 : ACCELERATION_G_MASK[index];
+		return (ACCELERATION_BIT_MASK[index] & projectionByte) ? 0 : ACCELERATION_G_MASK[index];
 	} else {
-		return projectionValue += (ACCELERATION_BIT_MASK[index] & projectionByte) ? ACCELERATION_G_MASK[index] : 0;
+		return (ACCELERATION_BIT_MASK[index] & projectionByte) ? ACCELERATION_G_MASK[index] : 0;
 	}
 }
 
 
 long int parseProjectionByte(uint8_t projectionByte) {
-	int i = 0;
 	long int projectionValue = 0;
 
 	int isNegative = projectionByte & BIT7;
 
-	for (; i < 7; i++) {
+	for (int i = 0; i < 7; i++) {
 		projectionValue = getProjectionGValueFromMaskByIndex(i, isNegative);
 	}
 
@@ -277,36 +249,60 @@ long int parseProjectionByte(uint8_t projectionByte) {
 	return projectionValue;
 }
 
-// int calculateAngleFromProjection(double projection) {
-// 	projection /= 1000;
-// 	projection = projection > 1 ? 1 : projection < -1 ? -1 : projection;
+int RADIAN_TO_ANGLE_COEFICIENT = 180 / PI;
 
-// 	double angle = acos(projection);
-// 	angle *= 57.3;
+double convertRadianToAngle(double radian) {
+	return radian * RADIAN_TO_ANGLE_COEFICIENT;
+}
 
-// 	return (int) angle;
-// }
+int getAngleByProjections(double xProjection, double yProjection) {
+	// projection /= 1000;
+	// projection = projection > 1 ? 1 : projection < -1 ? -1 : projection;
+
+	double radianAngle = atan(xProjection / yProjection);
+
+	double angle = convertRadianToAngle(radianAngle);
+
+	return (int) angle;
+}
 
 
+void enableLED2() { P8OUT |= BIT1; }
+void disableLED2() { P8OUT &= ~BIT1; }
+
+void setupLEDs() {
+  P8DIR |= BIT1; // make LED2 output
+  disableLED2(); // make LED2 off by default
+}
+
+int LOWEST_ANGLE_CLAMP = -135;
+int HIGHEST_ANGLE_CLAMP = -45;
+
+void handleAngleChanged(int angle) {
+	if (angle > LOWEST_ANGLE_CLAMP && angle < HIGHEST_ANGLE_CLAMP) {
+		enableLED2();
+	} else {
+		disableLED2();
+	}
+}
 
 int main(void) {
 	disableWatchDogTimer();
 
-	setupButtons();
+	setupLEDs();
 
 	Dogs102x6_init();
 	Dogs102x6_backlightInit();
 	Dogs102x6_clearScreen();
-	printNumber();
+	// printNumber();
 
 	__bis_SR_register(GIE);
 
 	return 0;
 }
 
-void printNumber(void) {
-	int nDigits = lenHelper(CURRENT_NUMBER);
-	int number = CURRENT_NUMBER;
+void printNumber(int number) {
+	int nDigits = lenHelper(number);
 
 	Dogs102x6_setAddress(0, COLUMN_START_ADDRESS);
 	Dogs102x6_writeData(number > 0 ? symbols[0] : symbols[1], 11);
@@ -330,6 +326,7 @@ void printNumber(void) {
 int lenHelper(int number) {
 	number = abs(number);
 
+	if (number >= 100000) return 6;
 	if (number >= 10000) return 5;
 	if (number >= 1000) return 4;
 	if (number >= 100) return 3;
