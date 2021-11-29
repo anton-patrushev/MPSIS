@@ -25,6 +25,10 @@ typedef unsigned char uint8_t;
 #define CD              BIT6 // CD - choose device mode (BIT6 -> P5.6)gc
 #define CS              BIT4 // CS - choose slave device (BIT4 -> P7.4)
 
+#define NONE						0
+#define READ_X_AXIS_G_DATA 			0x18
+#define READ_Y_AXIS_G_DATA 			0x1C
+
 uint8_t Dogs102x6_initMacro[] = {
 	SET_SCROLL_LINE,
 	SET_SEG_DIRECTION,
