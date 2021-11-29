@@ -154,6 +154,7 @@ void setupResetSignal() {
 	P5OUT |= BIT7; // RST = 1
 }
 
+// TODO: figure out how CMA init works
 void CMA3000_init(void) {
     P2DIR  &= ~BIT5;	// mode: input
     P2OUT  |=  BIT5;
@@ -193,6 +194,7 @@ void CMA3000_init(void) {
     __delay_cycles(25000);
 }
 
+// TODO: refactor + comment
 uint8_t CMA3000_writeCommand(uint8_t firstByte, uint8_t secondByte) {
     char indata;
 
@@ -222,6 +224,62 @@ uint8_t CMA3000_writeCommand(uint8_t firstByte, uint8_t secondByte) {
 
     return indata;
 }
+
+#pragma vector = PORT2_VECTOR
+__interrupt void accelerometerISR(void) {
+	// volatile uint8_t xProjectionByte = CMA3000_writeCommand(READ_X_AXIS_DATA, NONE);
+	// volatile uint8_t zProjectionByte = CMA3000_writeCommand(READ_Z_AXIS_DATA, NONE);
+
+	// volatile long int xAxisProjection = parseProjectionByte(xProjectionByte);
+	// volatile long int zAxisProjection = parseProjectionByte(zProjectionByte);
+
+	// volatile long int milesPerHourSquared = xAxisProjection * CONVERT_TO_MILIES_PER_HOURS;
+
+	// Dogs102x6_clearScreen();
+	// printNumber(milesPerHourSquared);
+
+	// int angle = calculateAngleFromProjection((double) xAxisProjection);
+	// angle *= zAxisProjection <= 0 ? 1 : -1;
+
+	// if (-45 >= angle && angle >= -135) {
+	// 	P1OUT |= BIT2;
+	// }
+	// else {
+	// 	P1OUT &= ~BIT2;
+	// }
+}
+
+
+// long int parseProjectionByte(uint8_t projectionByte) {
+// 	int i = 0;
+// 	long int projectionValue = 0;
+
+// 	int isNegative = projectionByte & BIT7;
+
+// 	for (; i < 7; i++) {
+// 		if (isNegative) {
+// 			projectionValue += (BITx[i] & projectionByte) ? 0 : MAPPING_VALUES[i];
+// 		}
+// 		else {
+// 			projectionValue += (BITx[i] & projectionByte) ? MAPPING_VALUES[i] : 0;
+// 		}
+// 	}
+
+// 	projectionValue *= isNegative ? -1 : 1;
+
+// 	return projectionValue;
+// }
+
+// int calculateAngleFromProjection(double projection) {
+// 	projection /= 1000;
+// 	projection = projection > 1 ? 1 : projection < -1 ? -1 : projection;
+
+// 	double angle = acos(projection);
+// 	angle *= 57.3;
+
+// 	return (int) angle;
+// }
+
 
 
 int main(void) {
