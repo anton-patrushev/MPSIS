@@ -1,4 +1,5 @@
 #include <msp430.h>
+#include <math.h>
 
 typedef unsigned char uint8_t;
 
@@ -28,6 +29,8 @@ typedef unsigned char uint8_t;
 #define NONE						0
 #define READ_X_AXIS_G_DATA 			0x18
 #define READ_Y_AXIS_G_DATA 			0x1C
+
+# define M_PI           3.14159265358979323846  /* pi */
 
 uint8_t Dogs102x6_initMacro[] = {
 	SET_SCROLL_LINE,
@@ -79,8 +82,8 @@ uint8_t symbols[12][11] = {
 
 int lenHelper(int number);
 int abs(int number);
-int pow(int base, int exponent);
-void printNumber(void);
+int _pow(int base, int exponent);
+void printNumber(int number);
 
 void Dogs102x6_clearScreen(void);
 void Dogs102x6_setAddress(uint8_t pa, uint8_t ca);
@@ -93,7 +96,7 @@ void CMA3000_init(void);
 uint8_t CMA3000_writeCommand(uint8_t firstByte, uint8_t secondByte);
 
 double convertRadianToAngle(double radian);
-int getProjectionGValueFromMaskByIndex(int index, int isNegative);
+int getProjectionGValueFromMaskByIndex(int index, int isNegative, uint8_t projectionByte);
 long int parseProjectionByte(uint8_t projectionByte);
 int getAngleByProjections(double xProjection, double yProjection);
 int convertGToMeterPerSeconds(int gValue);
@@ -102,25 +105,25 @@ void setupLEDs();
 void handleAngleChanged(int angle);
 
 
-#pragma vector = PORT1_VECTOR
-__interrupt void buttonS1(void)
-{
-	volatile int i = 0;
-
-	for (i = 0; i < 2000; i++);
-
-	if ((P1IN & BIT7) == 0) {
-		CURRENT_NUMBER += SUM_NUMBER;
-
-		Dogs102x6_clearScreen();
-
-		printNumber();
-
-		for (i = 0; i < 2000; i++);
-	}
-
-	P1IFG = 0;
-}
+//#pragma vector = PORT1_VECTOR
+//__interrupt void buttonS1(void)
+//{
+//	volatile int i = 0;
+//
+//	for (i = 0; i < 2000; i++);
+//
+//	if ((P1IN & BIT7) == 0) {
+//		CURRENT_NUMBER += SUM_NUMBER;
+//
+//		Dogs102x6_clearScreen();
+//
+//		printNumber();
+//
+//		for (i = 0; i < 2000; i++);
+//	}
+//
+//	P1IFG = 0;
+//}
 
 void disableWatchDogTimer() {
 	WDTCTL = WDTPW | WDTHOLD;
@@ -231,7 +234,7 @@ __interrupt void accelerometerISR(void) {
 	// }
 }
 
-int getProjectionGValueFromMaskByIndex(int index, int isNegative) {
+int getProjectionGValueFromMaskByIndex(int index, int isNegative, uint8_t projectionByte) {
 	if (isNegative) {
 		return (ACCELERATION_BIT_MASK[index] & projectionByte) ? 0 : ACCELERATION_G_MASK[index];
 	} else {
@@ -241,12 +244,13 @@ int getProjectionGValueFromMaskByIndex(int index, int isNegative) {
 
 
 long int parseProjectionByte(uint8_t projectionByte) {
+	int i = 0;
 	long int projectionValue = 0;
 
 	int isNegative = projectionByte & BIT7;
 
-	for (int i = 0; i < 7; i++) {
-		projectionValue = getProjectionGValueFromMaskByIndex(i, isNegative);
+	for (; i < 7; i++) {
+		projectionValue = getProjectionGValueFromMaskByIndex(i, isNegative, projectionByte);
 	}
 
 	projectionValue *= isNegative ? -1 : 1;
@@ -254,7 +258,7 @@ long int parseProjectionByte(uint8_t projectionByte) {
 	return projectionValue;
 }
 
-int RADIAN_TO_ANGLE_COEFICIENT = 180 / PI;
+int RADIAN_TO_ANGLE_COEFICIENT = 180 / M_PI;
 
 double convertRadianToAngle(double radian) {
 	return radian * RADIAN_TO_ANGLE_COEFICIENT;
@@ -275,8 +279,8 @@ double METER_PER_SECONDS_COEFFICIENT = 9.80665;
 
 int convertGToMeterPerSeconds(int gValue) {
 	double meterPerSeconds = gValue * METER_PER_SECONDS_COEFFICIENT;
-	
-	return (int)(meterPerSeconds * 1000)
+
+	return (int)(meterPerSeconds * 1000);
 }
 
 
@@ -307,6 +311,8 @@ int main(void) {
 	Dogs102x6_init();
 	Dogs102x6_backlightInit();
 	Dogs102x6_clearScreen();
+
+	CMA3000_init();
 	// printNumber();
 
 	__bis_SR_register(GIE);
@@ -321,7 +327,7 @@ void printNumber(int number) {
 	Dogs102x6_writeData(number > 0 ? symbols[0] : symbols[1], 11);
 
 	int i = 0;
-	int divider = pow(10, nDigits - 1);
+	int divider = _pow(10, nDigits - 1);
 
 	number = abs(number);
 
@@ -352,7 +358,7 @@ int abs(int number) {
 	return number > 0 ? number : number * (-1);
 }
 
-int pow(int base, int exponent) {
+int _pow(int base, int exponent) {
 	int i = 0;
 	int result = base;
 
