@@ -185,8 +185,7 @@ void setupAccelerometer()
 	CMA3000_writeCommand(
 		0x0A,
 		BIT4 |
-		BIT1 |
-		BIT7
+		BIT2
 	);
 	__delay_cycles(10500);
 }
@@ -388,7 +387,7 @@ int getProjectionValue(uchar projectionByte)
 	uchar isNegative = projectionByte & BIT7;
 	volatile int value_bits = 7;
 	uchar bits[] = { BIT6, BIT5, BIT4, BIT3, BIT2, BIT1, BIT0 };
-	int mapping[] = { 1142, 571, 286, 143, 71, 36, 18 };
+	int mapping[] = { 4571, 2286, 1142, 571, 286, 143, 71 };
 
 	int i = 0;
 	int projection = 0;
