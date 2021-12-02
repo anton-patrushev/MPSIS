@@ -231,6 +231,7 @@ void printNumber(int number) {
 int lenHelper(int number) {
 	number = abs(number);
 
+	if (number >= 100000) return 6;
 	if (number >= 10000) return 5;
 	if (number >= 1000) return 4;
 	if (number >= 100) return 3;
@@ -424,6 +425,12 @@ int getAngle(int xProjection, int yProjection)
 	return angle;
 }
 
+# define CONVERT_TO_METERS_PER_SECONDS           9.80665
+
+int convertToMeterPerSeconds(int gValue) {
+	return (double)gValue * CONVERT_TO_METERS_PER_SECONDS;
+}
+
 #pragma vector = PORT2_VECTOR
 __interrupt void __Accelerometer_ISR(void)
 {
@@ -455,7 +462,7 @@ __interrupt void __Accelerometer_ISR(void)
 	}
 
   Dogs102x6_clearScreen();
-  printNumber(angle);
+  printNumber(convertToMeterPerSeconds(x_projection));
 
 	if (angle >= -135 && angle <= -45) {
 		enableLED2();
