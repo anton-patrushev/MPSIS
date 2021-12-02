@@ -30,7 +30,7 @@ typedef unsigned char uchar;
 #define READ_X_AXIS_DATA 			0x18
 #define READ_Z_AXIS_DATA 			0x20
 
-uint8_t Dogs102x6_initMacro[] = {
+uchar Dogs102x6_initMacro[] = {
 	SET_SCROLL_LINE,
 	SET_SEG_DIRECTION,
 	SET_COM_DIRECTION,
@@ -51,7 +51,7 @@ uint8_t Dogs102x6_initMacro[] = {
 
 int COLUMN_START_ADDRESS = 30; // 0 - default (30), 1 - mirror horizontal (0)
 
-uint8_t symbols[12][11] = {
+uchar symbols[12][11] = {
 	{0x00, 0x00, 0x20, 0x20, 0x20, 0xF8, 0x20, 0x20, 0x20, 0x00, 0x00}, // plus
 	{0x00, 0x00, 0x00, 0x00, 0x00, 0xF8, 0x00, 0x00, 0x00, 0x00, 0x00}, // minus
 	{0xF8, 0xF8, 0xD8, 0xD8, 0xD8, 0xD8, 0xD8, 0xD8, 0xD8, 0xF8, 0xF8}, // num0
@@ -72,19 +72,29 @@ int _pow(int base, int exponent);
 void printNumber(int number);
 
 void Dogs102x6_clearScreen(void);
-void Dogs102x6_setAddress(uint8_t pa, uint8_t ca);
-void Dogs102x6_writeData(uint8_t* sData, uint8_t i);
-void Dogs102x6_writeCommand(uint8_t* sCmd, uint8_t i);
+void Dogs102x6_setAddress(uchar pa, uchar ca);
+void Dogs102x6_writeData(uchar* sData, uchar i);
+void Dogs102x6_writeCommand(uchar* sCmd, uchar i);
 void Dogs102x6_backlightInit(void);
 void Dogs102x6_init(void);
+
+void delay(long int value)
+{
+	volatile long int i = 0;
+	volatile long int temp = 0;
+	for (; i < value; i++)
+	{
+		temp++;
+	}
+}
+
+void enableLED2() { P8OUT |= BIT1; }
+void disableLED2() { P8OUT &= ~BIT1; }
 
 void setupLED2() {
   P8DIR |= BIT1; // make LED2 output
   disableLED2(); // make LED2 off by default
 }
-
-void enableLED2() { P8OUT |= BIT1; }
-void disableLED2() { P8OUT &= ~BIT1; }
 
 uchar CMA3000_writeCommand(uchar byte_one, uchar byte_two)
 {
@@ -247,8 +257,8 @@ int _pow(int base, int exponent) {
 
 void Dogs102x6_clearScreen(void)
 {
-	uint8_t LcdData[] = { 0x00 };
-	uint8_t p, c;
+	uchar LcdData[] = { 0x00 };
+	uchar p, c;
 
 	// 8 total pages in LCD controller memory
 	for (p = 0; p < 8; p++)
@@ -262,9 +272,9 @@ void Dogs102x6_clearScreen(void)
 	}
 }
 
-void Dogs102x6_setAddress(uint8_t pa, uint8_t ca)
+void Dogs102x6_setAddress(uchar pa, uchar ca)
 {
-	uint8_t cmd[1];
+	uchar cmd[1];
 
 	// 8 pages allowed
 	if (pa > 7) {
@@ -277,9 +287,9 @@ void Dogs102x6_setAddress(uint8_t pa, uint8_t ca)
 	}
 
 	cmd[0] = SET_PAGE_ADDRESS + (7 - pa); // (7 - pa) - inverse pages
-	uint8_t H = 0x00;
-	uint8_t L = 0x00;
-	uint8_t ColumnAddress[2];
+	uchar H = 0x00;
+	uchar L = 0x00;
+	uchar ColumnAddress[2];
 
 	L = (ca & 0x0F);
 	H = (ca & 0xF0);
@@ -292,7 +302,7 @@ void Dogs102x6_setAddress(uint8_t pa, uint8_t ca)
 	Dogs102x6_writeCommand(ColumnAddress, 2);
 }
 
-void Dogs102x6_writeData(uint8_t* sData, uint8_t i)
+void Dogs102x6_writeData(uchar* sData, uchar i)
 {
 	P7OUT &= ~CS;
 	P5OUT |= CD; // 1 - data mode
@@ -313,7 +323,7 @@ void Dogs102x6_writeData(uint8_t* sData, uint8_t i)
 	P7OUT |= CS;
 }
 
-void Dogs102x6_writeCommand(uint8_t* sCmd, uint8_t i)
+void Dogs102x6_writeCommand(uchar* sCmd, uchar i)
 {
 	P7OUT &= ~CS; // choose display
 	P5OUT &= ~CD; // enter command mode
