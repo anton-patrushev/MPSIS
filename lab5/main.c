@@ -1,7 +1,7 @@
 #include <msp430.h>
 #include <math.h>
 
-typedef unsigned char uint8_t;
+typedef unsigned char uchar;
 
 #define SET_COLUMN_ADDRESS_LSB        0x00
 #define SET_COLUMN_ADDRESS_MSB        0x10
@@ -23,14 +23,12 @@ typedef unsigned char uint8_t;
 #define SET_ADV_PROGRAM_CONTROL0_LSB  0x90 // WC – циклический сдвиг столбцов 0 = нет, 1 = есть; WP –циклический сдвиг страниц 0 = нет, 1 = есть.
 
 // CD: 0 - display choosen, 1 - controller choosen
-#define CD              BIT6 // CD - choose device mode (BIT6 -> P5.6)gc
+#define CD              BIT6 // CD - choose device mode (BIT6 -> P5.6)
 #define CS              BIT4 // CS - choose slave device (BIT4 -> P7.4)
 
 #define NONE						0
-#define READ_X_AXIS_G_DATA 			0x18
-#define READ_Y_AXIS_G_DATA 			0x1C
-
-# define M_PI           3.14159265358979323846  /* pi */
+#define READ_X_AXIS_DATA 			0x18
+#define READ_Z_AXIS_DATA 			0x20
 
 uint8_t Dogs102x6_initMacro[] = {
 	SET_SCROLL_LINE,
@@ -51,19 +49,7 @@ uint8_t Dogs102x6_initMacro[] = {
 	// SET_COLUMN_ADDRESS_LSB
 };
 
-// uint8_t MODE_COMMANDS[2][1] = { {SET_SEG_DIRECTION}, {SET_SEG_DIRECTION | 1} };
-
-// int CURRENT_ORIENTATION = 0; // 0 - default, 1 - mirror horizontal
 int COLUMN_START_ADDRESS = 30; // 0 - default (30), 1 - mirror horizontal (0)
-// int CURRENT_NUMBER = -5417;
-// int SUM_NUMBER = +981;
-
-// 3600 * 3600 / 1609 * 9.81 -- convert to miles per hour^2
-// long int CONVERT_TO_MILIES_PER_HOURS = 79020;
-
-// --------------------------  B6 -- B5 -- B4 -- B3 - B2 - B1 - B0 ----
-int ACCELERATION_G_MASK[] = { 4571, 2286, 1141, 571, 286, 143, 71 };
-uint8_t ACCELERATION_BIT_MASK[] = { BIT6, BIT5, BIT4, BIT3, BIT2, BIT1, BIT0 };
 
 uint8_t symbols[12][11] = {
 	{0x00, 0x00, 0x20, 0x20, 0x20, 0xF8, 0x20, 0x20, 0x20, 0x00, 0x00}, // plus
@@ -92,38 +78,44 @@ void Dogs102x6_writeCommand(uint8_t* sCmd, uint8_t i);
 void Dogs102x6_backlightInit(void);
 void Dogs102x6_init(void);
 
-void CMA3000_init(void);
-uint8_t CMA3000_writeCommand(uint8_t firstByte, uint8_t secondByte);
+void setupLED2() {
+  P8DIR |= BIT1; // make LED2 output
+  disableLED2(); // make LED2 off by default
+}
 
-double convertRadianToAngle(double radian);
-int getProjectionGValueFromMaskByIndex(int index, int isNegative, uint8_t projectionByte);
-long int parseProjectionByte(uint8_t projectionByte);
-int getAngleByProjections(double xProjection, double yProjection);
-int convertGToMeterPerSeconds(int gValue);
+void enableLED2() { P8OUT |= BIT1; }
+void disableLED2() { P8OUT &= ~BIT1; }
 
-void setupLEDs();
-void handleAngleChanged(int angle);
+uchar CMA3000_writeCommand(uchar byte_one, uchar byte_two)
+{
+  char indata;
 
+  P3OUT &= ~BIT5;
 
-//#pragma vector = PORT1_VECTOR
-//__interrupt void buttonS1(void)
-//{
-//	volatile int i = 0;
-//
-//	for (i = 0; i < 2000; i++);
-//
-//	if ((P1IN & BIT7) == 0) {
-//		CURRENT_NUMBER += SUM_NUMBER;
-//
-//		Dogs102x6_clearScreen();
-//
-//		printNumber();
-//
-//		for (i = 0; i < 2000; i++);
-//	}
-//
-//	P1IFG = 0;
-//}
+  indata = UCA0RXBUF;
+
+  while(!(UCA0IFG & UCTXIFG));
+
+  UCA0TXBUF = byte_one;
+
+  while(!(UCA0IFG & UCRXIFG));
+
+  indata = UCA0RXBUF;
+
+  while(!(UCA0IFG & UCTXIFG));
+
+  UCA0TXBUF = byte_two;
+
+  while(!(UCA0IFG & UCRXIFG));
+
+  indata = UCA0RXBUF;
+
+  while(UCA0STAT & UCBUSY);
+
+  P3OUT |= BIT5;
+
+  return indata;
+}
 
 void disableWatchDogTimer() {
 	WDTCTL = WDTPW | WDTHOLD;
@@ -135,10 +127,10 @@ void setupResetSignal() {
 	P5OUT |= BIT7; // RST = 1
 }
 
-// TODO: figure out how CMA init works
-void CMA3000_init(void) {
+// TODO: change to right values
+void setupAccelerometer()
+{
     P2DIR  &= ~BIT5;	// mode: input
-    P2OUT  |=  BIT5;
     P2REN  |=  BIT5;	// enable pull up resistor
     P2IE   |=  BIT5;	// interrupt enable
     P2IES  &= ~BIT5;	// process on interrupt's front
@@ -146,174 +138,59 @@ void CMA3000_init(void) {
 
     // set up cma3000 (CBS - Chip Select (active - 0))
     P3DIR  |=  BIT5;	// mode: output
-    P3OUT  |=  BIT5;	// disable cma3000 SPI data transfer
+    P3OUT  |=  BIT5;
 
     // set up ACCEL_SCK (SCK - Serial Clock)
-    P2DIR  |=  BIT7;	// mode: output
-    P2SEL  |=  BIT7;	// clk is  UCA0CLK
+    P2DIR  |=  BIT7;
+    P2SEL  |=  BIT7;
 
     // Setup SPI communication
     P3DIR  |= (BIT3 | BIT6);	// Set MOSI and PWM pins to output mode
-    P3DIR  &= ~BIT4;		// Set MISO to input mode
+    P3DIR  &= ~BIT4;			// Set MISO to input mode
     P3SEL  |= (BIT3 | BIT4);	// Set mode : P3.3 - UCA0SIMO , P3.4 - UCA0SOMI
-    P3OUT  |= BIT6;		// Power cma3000
-    UCA0CTL1 = UCSSEL_2 | UCSWRST;
+    P3OUT  |= BIT6;				// Power cma3000
 
-    UCA0BR0 = 0x30;
-    UCA0BR1 = 0x0;
+    UCA0CTL1 |= UCSWRST;		// set UCSWRST bit to disable USCI and change its control registers
 
-    UCA0CTL0 = UCCKPH & ~UCCKPL | UCMSB | UCMST | UCSYNC | UCMODE_0;
+    UCA0CTL0 = (
+		UCCKPH 	&	// UCCKPH - 1: change out on second signal change, capture input on first one)
+		~UCCKPL |	// UCCKPL - 0: active level is 1
+		UCMSB 	|	// MSB comes first, LSB is next
+		UCMST 	|	// Master mode
+		UCSYNC 	|	// Synchronous mode
+		UCMODE_0	// 3 pin SPI mode
+	);
 
-    UCA0CTL1 &= ~UCSWRST;
+	// set SMCLK as source and keep RESET
+	UCA0CTL1 = UCSSEL_2 | UCSWRST;
 
-    // dummy read from REVID
-    CMA3000_writeCommand(0x04, NONE);
-    __delay_cycles(1250);
+	UCA0BR0 = 0x50;	// LSB to 48
+	UCA0BR1 = 0x0;	// MSB to 0
 
-    // write to CTRL register
-    CMA3000_writeCommand(0x0A, BIT4 | BIT2);
-    __delay_cycles(25000);
-}
+	UCA0CTL1 &= ~UCSWRST;	// enable USCI
 
-// TODO: refactor + comment
-uint8_t CMA3000_writeCommand(uint8_t firstByte, uint8_t secondByte) {
-    char indata;
+	CMA3000_writeCommand(0x04, NONE);
+	__delay_cycles(550);
 
-    P3OUT &= ~BIT5;
-
-    indata = UCA0RXBUF;
-
-    while(!(UCA0IFG & UCTXIFG));
-
-    UCA0TXBUF = firstByte;
-
-    while(!(UCA0IFG & UCRXIFG));
-
-    indata = UCA0RXBUF;
-
-    while(!(UCA0IFG & UCTXIFG));
-
-    UCA0TXBUF = secondByte;
-
-    while(!(UCA0IFG & UCRXIFG));
-
-    indata = UCA0RXBUF;
-
-    while(UCA0STAT & UCBUSY);
-
-    P3OUT |= BIT5;
-
-    return indata;
-}
-
-#pragma vector = PORT2_VECTOR
-__interrupt void accelerometerISR(void) {
-	volatile uint8_t xProjectionRawByte = CMA3000_writeCommand(READ_X_AXIS_G_DATA, NONE);
-	volatile uint8_t yProjectionRawByte = CMA3000_writeCommand(READ_Y_AXIS_G_DATA, NONE);
-
-	volatile long int xAxisProjection = parseProjectionByte(xProjectionRawByte);
-	volatile long int yAxisProjection = parseProjectionByte(yProjectionRawByte);
-
-	volatile long int metersPerSecondsSquared = convertGToMeterPerSeconds(xAxisProjection);
-
-	Dogs102x6_clearScreen();
-	printNumber(metersPerSecondsSquared);
-
-	int angle = getAngleByProjections((double) xAxisProjection, (double) yAxisProjection);
-
-	handleAngleChanged(angle);
-
-
-	// angle *= zAxisProjection <= 0 ? 1 : -1;
-
-	// if (-45 >= angle && angle >= -135) {
-	// 	P1OUT |= BIT2;
-	// }
-	// else {
-	// 	P1OUT &= ~BIT2;
-	// }
-}
-
-int getProjectionGValueFromMaskByIndex(int index, int isNegative, uint8_t projectionByte) {
-	if (isNegative) {
-		return (ACCELERATION_BIT_MASK[index] & projectionByte) ? 0 : ACCELERATION_G_MASK[index];
-	} else {
-		return (ACCELERATION_BIT_MASK[index] & projectionByte) ? ACCELERATION_G_MASK[index] : 0;
-	}
-}
-
-
-long int parseProjectionByte(uint8_t projectionByte) {
-	int i = 0;
-	long int projectionValue = 0;
-
-	int isNegative = projectionByte & BIT7;
-
-	for (; i < 7; i++) {
-		projectionValue = getProjectionGValueFromMaskByIndex(i, isNegative, projectionByte);
-	}
-
-	projectionValue *= isNegative ? -1 : 1;
-
-	return projectionValue;
-}
-
-int RADIAN_TO_ANGLE_COEFICIENT = 180 / M_PI;
-
-double convertRadianToAngle(double radian) {
-	return radian * RADIAN_TO_ANGLE_COEFICIENT;
-}
-
-int getAngleByProjections(double xProjection, double yProjection) {
-	// projection /= 1000;
-	// projection = projection > 1 ? 1 : projection < -1 ? -1 : projection;
-
-	double radianAngle = atan(xProjection / yProjection);
-
-	double angle = convertRadianToAngle(radianAngle);
-
-	return (int) angle;
-}
-
-double METER_PER_SECONDS_COEFFICIENT = 9.80665;
-
-int convertGToMeterPerSeconds(int gValue) {
-	double meterPerSeconds = gValue * METER_PER_SECONDS_COEFFICIENT;
-
-	return (int)(meterPerSeconds * 1000);
-}
-
-
-void enableLED2() { P8OUT |= BIT1; }
-void disableLED2() { P8OUT &= ~BIT1; }
-
-void setupLEDs() {
-  P8DIR |= BIT1; // make LED2 output
-  disableLED2(); // make LED2 off by default
-}
-
-int LOWEST_ANGLE_CLAMP = -135;
-int HIGHEST_ANGLE_CLAMP = -45;
-
-void handleAngleChanged(int angle) {
-	if (angle > LOWEST_ANGLE_CLAMP && angle < HIGHEST_ANGLE_CLAMP) {
-		enableLED2();
-	} else {
-		disableLED2();
-	}
+	CMA3000_writeCommand(
+		0x0A,
+		BIT4 |
+		BIT1 |
+		BIT7
+	);
+	__delay_cycles(10500);
 }
 
 int main(void) {
 	disableWatchDogTimer();
 
-	setupLEDs();
+	setupLED2();
 
 	Dogs102x6_init();
 	Dogs102x6_backlightInit();
 	Dogs102x6_clearScreen();
 
-	CMA3000_init();
-	// printNumber();
+	setupAccelerometer();
 
 	__bis_SR_register(GIE);
 
@@ -345,7 +222,6 @@ void printNumber(int number) {
 int lenHelper(int number) {
 	number = abs(number);
 
-	if (number >= 100000) return 6;
 	if (number >= 10000) return 5;
 	if (number >= 1000) return 4;
 	if (number >= 100) return 3;
@@ -497,3 +373,85 @@ void Dogs102x6_init(void)
 	Dogs102x6_writeCommand(Dogs102x6_initMacro, 13);
 }
 
+int getProjectionValue(uchar projectionByte)
+{
+	uchar isNegative = projectionByte & BIT7;
+	volatile int value_bits = 7;
+	uchar bits[] = { BIT6, BIT5, BIT4, BIT3, BIT2, BIT1, BIT0 };
+	int mapping[] = { 1142, 571, 286, 143, 71, 36, 18 };
+
+	int i = 0;
+	int projection = 0;
+	for (; i < value_bits; i++)
+	{
+		if (!isNegative)
+		{
+			projection += (bits[i] & projectionByte) ? mapping[i] : 0;
+		}
+		else
+		{
+			projection += (bits[i] & projectionByte) ? 0 : mapping[i];
+		}
+	}
+	projection = isNegative ? projection * (-1) : projection;
+
+	return projection;
+}
+
+# define M_PI           3.14159265358979323846  /* pi */
+
+double RADIAN_TO_ANGLE_COEFICIENT = 180 / M_PI;
+
+double convertRadianToAngle(double radian) {
+	return radian * RADIAN_TO_ANGLE_COEFICIENT;
+}
+
+int getAngle(int xProjection, int yProjection)
+{
+	double radianAngle = atan((double)xProjection / (double)yProjection);
+
+	double angle = convertRadianToAngle(radianAngle);
+
+	return angle;
+}
+
+#pragma vector = PORT2_VECTOR
+__interrupt void __Accelerometer_ISR(void)
+{
+	delay(300);
+	uchar z_projection_byte = CMA3000_writeCommand(READ_Z_AXIS_DATA, NONE);
+	delay(300);
+	uchar x_projection_byte = CMA3000_writeCommand(READ_X_AXIS_DATA, NONE);
+
+	int x_projection = getProjectionValue(x_projection_byte);
+	int z_projection = getProjectionValue(z_projection_byte);
+
+	int angle = getAngle(x_projection, z_projection);
+
+		// 1
+	if(x_projection >= 0 && z_projection >= 0) {
+		angle *= -1;
+	} else
+		// 2
+		if(x_projection >= 0 && z_projection < 0) {
+		angle = -180 - angle;
+	} else
+		// 3
+		if(x_projection < 0 && z_projection >= 0) {
+		angle *= -1;
+	}
+		// 4
+		else { // (x_projection < 0 && z_projection < 0)
+		angle = 180 - angle;
+	}
+
+  Dogs102x6_clearScreen();
+  printNumber(angle);
+
+	if (angle >= -135 && angle <= -45) {
+		enableLED2();
+	}
+	else {
+		disableLED2();
+	}
+}
