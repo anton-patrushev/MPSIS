@@ -137,7 +137,6 @@ void setupResetSignal() {
 	P5OUT |= BIT7; // RST = 1
 }
 
-// TODO: change to right values
 void setupAccelerometer()
 {
     P2DIR  &= ~BIT5;	// mode: input
@@ -146,7 +145,7 @@ void setupAccelerometer()
     P2IES  &= ~BIT5;	// process on interrupt's front
     P2IFG  &= ~BIT5;	// clear interrupt flag
 
-    // set up cma3000 (CBS - Chip Select (active - 0))
+    // set up cma3000 (CBS - Chip Select)
     P3DIR  |=  BIT5;	// mode: output
     P3OUT  |=  BIT5;
 
@@ -174,8 +173,8 @@ void setupAccelerometer()
 	// set SMCLK as source and keep RESET
 	UCA0CTL1 = UCSSEL_2 | UCSWRST;
 
-	UCA0BR0 = 0x50;	// LSB to 48
-	UCA0BR1 = 0x0;	// MSB to 0
+	UCA0BR0 = 0x50;
+	UCA0BR1 = 0x0;
 
 	UCA0CTL1 &= ~UCSWRST;	// enable USCI
 
