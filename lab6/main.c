@@ -163,9 +163,9 @@ void initADC()
 {
     ADC12CTL0 = ADC12ON;
     ADC12CTL1 = ADC12CSTARTADD_0 | //��������� ����� ������ �����������
-            ADC12SHS_0 | // �������� - ������������
+            ADC12SHS_3 | // �������� - ������������
             ADC12SSEL_0 |	// ������������ ADC12OSC
-            ADC12CONSEQ_2; //���������������� �����
+            ADC12CONSEQ_0; //���������������� �����
 
     ADC12MCTL0 = ADC12EOS | ADC12INCH_5;
     ADC12IE = ADC12IE0;//���������� ���������� �� ���������������� �����
@@ -180,6 +180,28 @@ __interrupt void ADC12_ISR() {
     ADC12CTL0 &= ~ADC12ENC;
 }
 
+void timer_init(void) {
+    TB0CTL |= TBSSEL__ACLK;
+    TB0CTL |= ID__1;
+    TB0CCR0 = 8000;
+    TB0CCR1 = 7990;
+    TA0R = 0;
+    TB0CCTL1 |= OUTMOD_3;
+    TB0CTL |= MC__UP;
+}
+
+void SetupTimer()
+{
+    // doesn't affect sample/conversion!!!, only triggers the beginning
+
+    // setup timer
+    TA0CTL = TASSEL__SMCLK | MC__UP | ID__1 | TACLR;     // SMCLK, UP-mode
+    long int second = 32768;
+    long int period = second / 2;
+    TA0CCR0 = second;
+    TA0CCR1 = period;
+    TA0CCTL1 = OUTMOD_3;
+}
 
 int main(void)
 {
@@ -207,6 +229,7 @@ int main(void)
 
     initPotentiometer();
     initADC();
+    timer_init();
 
     __bis_SR_register(GIE);
 
@@ -216,15 +239,16 @@ int main(void)
       if (keypressed == address_list[0]) {
               P1OUT |= BIT1;
 
-              if (!(ADC12CTL1 & ADC12BUSY)) {
-                    ADC12CTL0 |= ADC12ENC; //���������� ���������
-                    ADC12CTL0 |= ADC12SC;
-                    __delay_cycles(1000);
-                    ADC12CTL0 &= ~ADC12SC;
-                }
+              if (!(ADC12CTL1 & ADC12BUSY)) // if there is no active operation
+				{
+					SetupTimer();
+					ADC12CTL0 |= ADC12ENC;
+				}
           }
       __delay_cycles(1000000);
     }
+
+
 }
 
 void printNumber(int number) {
