@@ -100,49 +100,6 @@ void delay(long int value)
 	}
 }
 
-void enableLED2() { P8OUT |= BIT1; }
-void disableLED2() { P8OUT &= ~BIT1; }
-
-void setupLED2() {
-  P8DIR |= BIT1; // make LED2 output
-  disableLED2(); // make LED2 off by default
-}
-
-uchar CMA3000_writeCommand(uchar byte_one, uchar byte_two)
-{
-  char indata;
-
-  P3OUT &= ~BIT5;
-
-  indata = UCA0RXBUF;
-
-  while(!(UCA0IFG & UCTXIFG));
-
-  UCA0TXBUF = byte_one;
-
-  while(!(UCA0IFG & UCRXIFG));
-
-  indata = UCA0RXBUF;
-
-  while(!(UCA0IFG & UCTXIFG));
-
-  UCA0TXBUF = byte_two;
-
-  while(!(UCA0IFG & UCRXIFG));
-
-  indata = UCA0RXBUF;
-
-  while(UCA0STAT & UCBUSY);
-
-  P3OUT |= BIT5;
-
-  return indata;
-}
-
-void disableWatchDogTimer() {
-	WDTCTL = WDTPW | WDTHOLD;
-}
-
 void setupResetSignal() {
 	P5DIR |= BIT7; // output direction
 	P5OUT &= ~BIT7; // RST = 0
@@ -412,22 +369,4 @@ void Dogs102x6_init(void)
 	UCB1IFG &= ~UCRXIFG;
 
 	Dogs102x6_writeCommand(Dogs102x6_initMacro, 13);
-}
-
-void setUp(uint16_t level)
-{
-    PMMCTL0_H = PMMPW_H;
-
-    SVSMHCTL = SVSHE + SVSHRVL0 * level + SVMHE + SVSMHRRL0 * level;
-    SVSMLCTL = SVSLE + SVMLE + SVSMLRRL0 * level;
-
-    while ((PMMIFG & SVSMLDLYIFG) == 0);
-
-    PMMIFG &= ~(SVMLVLRIFG + SVMLIFG);
-    PMMCTL0_L = PMMCOREV0 * level;
-
-    if ((PMMIFG & SVMLIFG))
-        while ((PMMIFG & SVMLVLRIFG) == 0);
-    SVSMLCTL = SVSLE + SVSLRVL0 * level + SVMLE + SVSMLRRL0 * level;
-    PMMCTL0_H = 0x00;
 }
