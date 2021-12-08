@@ -190,19 +190,6 @@ void timer_init(void) {
     TB0CTL |= MC__UP;
 }
 
-void SetupTimer()
-{
-    // doesn't affect sample/conversion!!!, only triggers the beginning
-
-    // setup timer
-    TA0CTL = TASSEL__SMCLK | MC__UP | ID__1 | TACLR;     // SMCLK, UP-mode
-    long int second = 32768;
-    long int period = second / 2;
-    TA0CCR0 = second;
-    TA0CCR1 = period;
-    TA0CCTL1 = OUTMOD_3;
-}
-
 int main(void)
 {
     WDTCTL = WDTPW | WDTHOLD;
@@ -241,7 +228,6 @@ int main(void)
 
               if (!(ADC12CTL1 & ADC12BUSY)) // if there is no active operation
 				{
-					SetupTimer();
 					ADC12CTL0 |= ADC12ENC;
 				}
           }
