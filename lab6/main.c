@@ -1,7 +1,7 @@
 #include <msp430.h>
+#include "CTS_Layer.h"
 #include <math.h>
 
-#include <libs/CTS_Layer.h>
 
 typedef unsigned char uchar;
 
@@ -63,6 +63,20 @@ uchar symbols[12][11] = {
 	{0xF8, 0xF8, 0xD8, 0xD8, 0xD8, 0xF8, 0xD8, 0xD8, 0xD8, 0xF8, 0xF8}, // num8
 	{0xF8, 0xF8, 0x18, 0x18, 0xF8, 0xF8, 0xD8, 0xD8, 0xD8, 0xF8, 0xF8}  // num9
 };
+
+
+
+#define NUM_KEYS    5
+#define LED4        BIT5
+#define LED5        BIT4
+#define LED6        BIT3
+#define LED7        BIT2
+#define LED8        BIT1
+
+struct Element* keypressed;
+
+const struct Element* address_list[NUM_KEYS] = {&PAD1, &PAD2, &PAD3, &PAD4, &PAD5};
+const uint8_t ledMask[NUM_KEYS] = {LED4, LED5, LED6, LED7, LED8};
 
 int lenHelper(int number);
 int abs(int number);
@@ -135,54 +149,82 @@ void setupResetSignal() {
 	P5OUT |= BIT7; // RST = 1
 }
 
-// !
-// just according to docs
-void initPotentiometer() {
-    P6DIR &= ~BIT5; // make input for reading
-    P6SEL |= BIT5; // make peripheral
 
-    P8DIR |= BIT0; // make output
-    P8SEL &= ~BIT0; // make IO
-    P8OUT |= BIT0; // send H level value
+void initPotentiometer() {
+    P6DIR &= ~BIT5; //����� �5 �����������
+    P6SEL |= BIT5;
+    P8DIR |= BIT0;// ����� �� �������� �������� �����������
+    P8SEL &= ~BIT0;
+    P8OUT |= BIT0;
 }
 
-// !
+
 void initADC()
 {
     ADC12CTL0 = ADC12ON;
-    ADC12CTL1 = ADC12CSTARTADD_0 | //�ڇ?�ӂ?� ��?�� ������ ?���θڇ�ӂ
-            ADC12SHS_0 | // ���Ә��� - ����̈�����?
-            ADC12SSEL_0 |	// ڇ���?ӂ���� ADC12OSC
-            ADC12CONSEQ_2; //����ӂ���θ�?� ?����
+    ADC12CTL1 = ADC12CSTARTADD_0 | //��������� ����� ������ �����������
+            ADC12SHS_0 | // �������� - ������������
+            ADC12SSEL_0 |	// ������������ ADC12OSC
+            ADC12CONSEQ_2; //���������������� �����
 
     ADC12MCTL0 = ADC12EOS | ADC12INCH_5;
-    ADC12IE = ADC12IE0;//?��?¯���� �?�??����? �� ���ڂ���ڂ�??��� �·��
+    ADC12IE = ADC12IE0;//���������� ���������� �� ���������������� �����
 }
 
 
-// !
 #pragma vector = ADC12_VECTOR
 __interrupt void ADC12_ISR() {
-    clearDisplay();
+	Dogs102x6_clearScreen();
     __delay_cycles(1000000);
     printNumber(ADC12MEM0 * (1.5 / 4096) * 1000);
     ADC12CTL0 &= ~ADC12ENC;
 }
 
-int main(void) {
-	disableWatchDogTimer();
 
-	setupLED2();
+int main(void)
+{
+    WDTCTL = WDTPW | WDTHOLD;
 
 	Dogs102x6_init();
 	Dogs102x6_backlightInit();
 	Dogs102x6_clearScreen();
 
-	setupAccelerometer();
+    P1DIR = 0xFF;
+    P1OUT = 0;
 
-	__bis_SR_register(GIE);
+    UCSCTL3 = SELREF_2;
+    UCSCTL4 |= SELA_2;
 
-	return 0;
+    __bis_SR_register(SCG0);                  // Disable the FLL control loop
+    UCSCTL0 = 0x0000;
+    UCSCTL1 = DCORSEL_7;
+    UCSCTL2 = FLLD_1 + 762;
+
+    __bic_SR_register(SCG0);
+
+    TI_CAPT_Init_Baseline(&keypad);
+    TI_CAPT_Update_Baseline(&keypad, 5);
+
+    initPotentiometer();
+    initADC();
+
+    __bis_SR_register(GIE);
+
+    while (1) {
+      P1OUT &= ~(LED4 + LED5 + LED6 + LED7 + LED8);
+      keypressed = (struct Element *) TI_CAPT_Buttons(&keypad);
+      if (keypressed == address_list[0]) {
+              P1OUT |= BIT1;
+
+              if (!(ADC12CTL1 & ADC12BUSY)) {
+                    ADC12CTL0 |= ADC12ENC; //���������� ���������
+                    ADC12CTL0 |= ADC12SC;
+                    __delay_cycles(1000);
+                    ADC12CTL0 &= ~ADC12SC;
+                }
+          }
+      __delay_cycles(1000000);
+    }
 }
 
 void printNumber(int number) {
@@ -348,7 +390,7 @@ void Dogs102x6_init(void)
 	// UCSSEL__SMCLK - Select SMCLK as signal source
 	// UCSWRST - enable software reset
 	UCB1CTL1 = UCSSEL__SMCLK + UCSWRST;
-	
+
 	//3-pin, 8-bit SPI master
 	UCB1CTL0 = UCCKPH + UCMSB + UCMST + UCMODE_0 + UCSYNC;
 
@@ -360,4 +402,22 @@ void Dogs102x6_init(void)
 	UCB1IFG &= ~UCRXIFG;
 
 	Dogs102x6_writeCommand(Dogs102x6_initMacro, 13);
+}
+
+void setUp(uint16_t level)
+{
+    PMMCTL0_H = PMMPW_H;
+
+    SVSMHCTL = SVSHE + SVSHRVL0 * level + SVMHE + SVSMHRRL0 * level;
+    SVSMLCTL = SVSLE + SVMLE + SVSMLRRL0 * level;
+
+    while ((PMMIFG & SVSMLDLYIFG) == 0);
+
+    PMMIFG &= ~(SVMLVLRIFG + SVMLIFG);
+    PMMCTL0_L = PMMCOREV0 * level;
+
+    if ((PMMIFG & SVMLIFG))
+        while ((PMMIFG & SVMLVLRIFG) == 0);
+    SVSMLCTL = SVSLE + SVSLRVL0 * level + SVMLE + SVSMLRRL0 * level;
+    PMMCTL0_H = 0x00;
 }
