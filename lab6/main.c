@@ -107,10 +107,11 @@ void setupResetSignal() {
 }
 
 
+// just according to docs
 void initPotentiometer() {
-    P6DIR &= ~BIT5; //����� �5 �����������
+    P6DIR &= ~BIT5;
     P6SEL |= BIT5;
-    P8DIR |= BIT0;// ����� �� �������� �������� �����������
+    P8DIR |= BIT0;
     P8SEL &= ~BIT0;
     P8OUT |= BIT0;
 }
@@ -119,13 +120,13 @@ void initPotentiometer() {
 void initADC()
 {
     ADC12CTL0 = ADC12ON;
-    ADC12CTL1 = ADC12CSTARTADD_0 | //��������� ����� ������ �����������
-            ADC12SHS_3 | // �������� - ������������
-            ADC12SSEL_0 |	// ������������ ADC12OSC
-            ADC12CONSEQ_0; //���������������� �����
+    ADC12CTL1 = ADC12CSTARTADD_0 | // start writable memory address
+            ADC12SHS_3 | // SHS - capture (start) signal source
+            ADC12SSEL_0 | // clock signal
+            ADC12CONSEQ_0; // consequence mode
 
-    ADC12MCTL0 = ADC12EOS | ADC12INCH_5;
-    ADC12IE = ADC12IE0;//���������� ���������� �� ���������������� �����
+    ADC12MCTL0 = ADC12EOS | ADC12INCH_5; // EOS - end of stream marker, 5ft input channel (potentiometer)
+    ADC12IE = ADC12IE0; // enable interrupt
 }
 
 
@@ -133,16 +134,22 @@ void initADC()
 __interrupt void ADC12_ISR() {
 	Dogs102x6_clearScreen();
     __delay_cycles(1000000);
+	// 1.5V - Reference Voltage
+	// NADC = 4096 * (VIN – VR-) / (VR+ – VR- )
     printNumber(ADC12MEM0 * (1.5 / 4096) * 1000);
-    ADC12CTL0 &= ~ADC12ENC;
+    ADC12CTL0 &= ~ADC12ENC; // disable measurements
 }
 
 void timer_init(void) {
     TB0CTL |= TBSSEL__ACLK;
-    TB0CTL |= ID__1;
+    TB0CTL |= ID__1; // input clk divider /1
+
+	//! review which to remove
     TB0CCR0 = 8000;
     TB0CCR1 = 7990;
+
     TA0R = 0; //! cadidate to remove (or replace with TB0R = 0)
+
     TB0CCTL1 |= OUTMOD_3;
     TB0CTL |= MC__UP;
 }
@@ -172,7 +179,7 @@ void SetVcoreUp(uint16_t level) {
     PMMCTL0_H = 0x00;
 }
 
-void pieceOfShitTakenFromMSP430FF_UCS_10() {
+void sensorsSetup() {
 	    // uint8_t i;
 
         // /* Initialize IO */
@@ -219,6 +226,9 @@ void pieceOfShitTakenFromMSP430FF_UCS_10() {
           SFRIFG1 &= ~OFIFG;                      // Clear fault flags
         }
         while (SFRIFG1 & OFIFG);                   // Test oscillator fault flag
+
+		TI_CAPT_Init_Baseline(&keypad);
+   		TI_CAPT_Update_Baseline(&keypad, 5);
 }
 
 int main(void)
@@ -242,10 +252,7 @@ int main(void)
 
     // __bic_SR_register(SCG0);
 
-	pieceOfShitTakenFromMSP430FF_UCS_10();
-
-    TI_CAPT_Init_Baseline(&keypad);
-    TI_CAPT_Update_Baseline(&keypad, 5);
+	sensorsSetup();
 
     initPotentiometer();
     initADC();
