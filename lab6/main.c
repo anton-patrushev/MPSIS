@@ -142,9 +142,83 @@ void timer_init(void) {
     TB0CTL |= ID__1;
     TB0CCR0 = 8000;
     TB0CCR1 = 7990;
-    TA0R = 0;
+    TA0R = 0; //! cadidate to remove (or replace with TB0R = 0)
     TB0CCTL1 |= OUTMOD_3;
     TB0CTL |= MC__UP;
+}
+
+// Taken from UCS_10
+void SetVcoreUp(uint16_t level) {
+    // Open PMM registers for write
+    PMMCTL0_H = PMMPW_H;
+    // Set SVS/SVM high side new level
+    SVSMHCTL = SVSHE + SVSHRVL0 * level + SVMHE + SVSMHRRL0 * level;
+    // Set SVM low side to new level
+    SVSMLCTL = SVSLE + SVMLE + SVSMLRRL0 * level;
+    // Wait till SVM is settled
+    while ((PMMIFG & SVSMLDLYIFG) == 0)
+        ;
+    // Clear already set flags
+    PMMIFG &= ~(SVMLVLRIFG + SVMLIFG);
+    // Set VCore to new level
+    PMMCTL0_L = PMMCOREV0 * level;
+    // Wait till new level reached
+    if ((PMMIFG & SVMLIFG))
+        while ((PMMIFG & SVMLVLRIFG) == 0)
+            ;
+    // Set SVS/SVM low side to new level
+    SVSMLCTL = SVSLE + SVSLRVL0 * level + SVMLE + SVSMLRRL0 * level;
+    // Lock PMM registers for write access
+    PMMCTL0_H = 0x00;
+}
+
+void pieceOfShitTakenFromMSP430FF_UCS_10() {
+	    // uint8_t i;
+
+        // /* Initialize IO */
+        // P1DIR = 0xFF;
+        // P2DIR = 0xFF;
+        // P8DIR = 0xFF;
+        // P1OUT = 0;
+        // P2OUT = 0;
+        // P8OUT = 0;
+
+        /*
+        *  Set DCO to 25Mhz and SMCLK to DCO. Taken from MSP430F55xx_UCS_10.c code
+        *  example.
+        */
+        // Increase Vcore setting to level3 to support fsystem=25MHz
+        // NOTE: Change core voltage one level at a time..
+        SetVcoreUp(0x01);
+        SetVcoreUp(0x02);
+        SetVcoreUp(0x03);
+
+        UCSCTL3 = SELREF_2;                       // Set DCO FLL reference = REFO
+        UCSCTL4 |= SELA_2;                        // Set ACLK = REFO
+
+        __bis_SR_register(SCG0);                  // Disable the FLL control loop
+        UCSCTL0 = 0x0000;                         // Set lowest possible DCOx, MODx
+        UCSCTL1 = DCORSEL_7;
+        // Select DCO range 50MHz operation
+        UCSCTL2 = FLLD_1 + 762;                   // Set DCO Multiplier for 25MHz
+                                                // (N + 1) * FLLRef = Fdco
+                                                // (762 + 1) * 32768 = 25MHz
+                                                // Set FLL Div = fDCOCLK/2
+        __bic_SR_register(SCG0);                  // Enable the FLL control loop
+
+        // Worst-case settling time for the DCO when the DCO range bits have been
+        // changed is n x 32 x 32 x f_MCLK / f_FLL_reference. See UCS chapter in 5xx
+        // UG for optimization.
+        // 32 x 32 x 25 MHz / 32,768 Hz ~ 780k MCLK cycles for DCO to settle
+        __delay_cycles(782000);
+        // Loop until XT1,XT2 & DCO stabilizes - In this case only DCO has to stabilize
+        do
+        {
+          UCSCTL7 &= ~(XT2OFFG + XT1LFOFFG + DCOFFG);
+          // Clear XT2,XT1,DCO fault flags
+          SFRIFG1 &= ~OFIFG;                      // Clear fault flags
+        }
+        while (SFRIFG1 & OFIFG);                   // Test oscillator fault flag
 }
 
 int main(void)
@@ -155,18 +229,20 @@ int main(void)
 	Dogs102x6_backlightInit();
 	Dogs102x6_clearScreen();
 
-    P1DIR = 0xFF;
-    P1OUT = 0;
+    P1DIR = 0xFF; // enable output mode for all P1 pins (done for LEDs disabling)
+    P1OUT = 0; // set all P1 pins to zero values
 
-    UCSCTL3 = SELREF_2;
-    UCSCTL4 |= SELA_2;
+    // UCSCTL3 = SELREF_2; // Set DCO FLL reference = REFO
+    // UCSCTL4 |= SELA_2;
 
-    __bis_SR_register(SCG0);                  // Disable the FLL control loop
-    UCSCTL0 = 0x0000;
-    UCSCTL1 = DCORSEL_7;
-    UCSCTL2 = FLLD_1 + 762;
+    // __bis_SR_register(SCG0);                  // Disable the FLL control loop
+    // UCSCTL0 = 0x0000;
+    // UCSCTL1 = DCORSEL_7;
+    // UCSCTL2 = FLLD_1 + 762;
 
-    __bic_SR_register(SCG0);
+    // __bic_SR_register(SCG0);
+
+	pieceOfShitTakenFromMSP430FF_UCS_10();
 
     TI_CAPT_Init_Baseline(&keypad);
     TI_CAPT_Update_Baseline(&keypad, 5);
